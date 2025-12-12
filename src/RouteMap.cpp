@@ -183,6 +183,7 @@ RouteMapConfiguration::RouteMapConfiguration()
       MotorSpeed(5.0),
       StartLon(0),
       EndLon(0),
+      StartCog(NAN),
       grib(nullptr),
       grib_is_data_deficient(false),
       accepted_candidate_count(0),
@@ -240,12 +241,19 @@ double RouteMapConfiguration::GetBoatLon() {
   return NAN;
 }
 
+double RouteMapConfiguration::GetBoatCog() {
+  if (s_plugin_instance) return s_plugin_instance->m_boat_cog;
+  return NAN;
+}
+
 bool RouteMapConfiguration::Update() {
   bool havestart = false, haveend = false;
+  StartCog = NAN;
 
   if (StartType == RouteMapConfiguration::START_FROM_BOAT) {
     StartLat = GetBoatLat();
     StartLon = GetBoatLon();
+    StartCog = GetBoatCog();  // Not a problem if NAN
     if (!std::isnan(StartLat) && !std::isnan(StartLon)) {
       havestart = true;
     }
@@ -273,7 +281,7 @@ bool RouteMapConfiguration::Update() {
     haveend = ResolvePosition(End, EndLat, EndLon);
 
   if (!havestart || !haveend) {
-    StartLat = StartLon = EndLat = EndLon = NAN;
+    StartLat = StartLon = EndLat = EndLon = StartCog = NAN;
     return false;
   }
 
@@ -565,7 +573,8 @@ bool RouteMap::Propagate() {
   wxStopWatch propagateTimer;
   if (origin.empty()) {
     // The routing calculation has not started yet.
-    Position* np = new Position(configuration.StartLat, configuration.StartLon);
+    Position* np = new Position(configuration.StartLat, configuration.StartLon,
+                                nullptr, configuration.StartCog);
     np->prev = np->next = np;
     routelist.push_back(new IsoRoute(np->BuildSkipList()));
     configuration.grib = nullptr;
