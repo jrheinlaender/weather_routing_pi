@@ -446,7 +446,7 @@ double RoutePoint::RhumbLinePropagateToPoint(
   if (rhumbDistance <= maxSegmentLength) {
     double heading;
     double time =
-        PropagateToPoint(dlat, dlon, configuration, heading, data_mask, true);
+        PropagateToPoint(dlat, dlon, configuration, NAN, heading, data_mask, true);
     if (!std::isnan(time)) {
       // If the destination is reachable, add it to intermediate points
       RoutePoint* endpoint = new RoutePoint(
@@ -524,7 +524,7 @@ double RoutePoint::RhumbLinePropagateToPoint(
     double heading;
     // Attempt to propagate to the next point
     double segmentTime = currentPoint->PropagateToPoint(
-        nextLat, nextLon, configuration, heading, data_mask, isLastSegment);
+        nextLat, nextLon, configuration, NAN, heading, data_mask, isLastSegment);
 
     if (std::isnan(segmentTime)) {
       // Could not reach this waypoint, propagation failed
@@ -571,6 +571,7 @@ double RoutePoint::RhumbLinePropagateToPoint(
 
 double RoutePoint::PropagateToPoint(double dlat, double dlon,
                                     RouteMapConfiguration& configuration,
+                                    const double parent_heading,
                                     double& heading, int& data_mask, bool end) {
   PropagationError error_code;
   WeatherData weather_data(this);
@@ -618,7 +619,7 @@ double RoutePoint::PropagateToPoint(double dlat, double dlon,
     double timeseconds = 0.0;
 
     if (!boat_data.GetBestPolarAndBoatSpeed(
-            configuration, weather_data, heading, ctw, NAN /*parent_heading*/,
+            configuration, weather_data, heading, ctw, parent_heading,
             data_mask, this->performance, newperformance, this->polar, newpolar,
             timeseconds) ||
         ++iters == 10  // give up

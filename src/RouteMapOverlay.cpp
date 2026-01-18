@@ -262,7 +262,7 @@ void RouteMapOverlay::RouteAnalysis(PlugIn_Route* proute) {
     pwp = pwpnode->GetData();
     rte.lat = pwp->m_lat, rte.lon = pwp->m_lon;
     next = &rte;
-    eta = data.PropagateToPoint(rte.lat, rte.lon, configuration, H, data_mask,
+    eta = data.PropagateToPoint(rte.lat, rte.lon, configuration, NAN, H, data_mask,
                                 false);
     if (std::isnan(eta)) {
       ok = false;
@@ -2695,7 +2695,8 @@ RouteMapOverlay::ReverseSegmentFeasibility RouteMapOverlay::CanSailSegment(
                  start->grib_is_data_deficient);
   double heading = NAN;
   int data_mask = start->data_mask;
-  double dt = probe.PropagateToPoint(end_lat, end_lon, configuration, heading,
+  // Note: Member parent_heading is in class Position but not in RoutePoint::PropagateToPoint()
+  double dt = probe.PropagateToPoint(end_lat, end_lon, configuration, probe.parent_heading, heading,
                                      data_mask, true);
   bool endpoint_bridge = DistGreatCircle(end_lat, end_lon, configuration.EndLat,
                                          configuration.EndLon) < 0.01;
@@ -2713,8 +2714,8 @@ RouteMapOverlay::ReverseSegmentFeasibility RouteMapOverlay::CanSailSegment(
     double relaxed_heading = NAN;
     int relaxed_data_mask = start->data_mask;
     double relaxed_dt = relaxed_probe.PropagateToPoint(
-        end_lat, end_lon, relaxed_configuration, relaxed_heading,
-        relaxed_data_mask, true);
+        end_lat, end_lon, relaxed_configuration, relaxed_probe.parent_heading,
+        relaxed_heading, relaxed_data_mask, true);
     if (!std::isnan(relaxed_dt) && relaxed_dt <= available_seconds) {
       dt = relaxed_dt;
       heading = relaxed_heading;
