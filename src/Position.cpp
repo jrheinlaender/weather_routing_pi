@@ -358,7 +358,7 @@ bool Position::Propagate(IsoRouteList& routelist,
       int newpolar = -1;
       // Note: newperformance is applied to the boat_data.stw, boat_data.cog and
       // boat_data.dist. Penalties for sail plan change, tacking and jibing are
-      // subtracted from timeseconds, which is used to calculated boat_data.dist
+      // subtracted from timeseconds, which is used to calculate boat_data.dist
       double newperformance = performance;
       if (!boat_data.GetBestPolarAndBoatSpeed(
               configuration, weather_data, twa, ctw, parent_heading, data_mask,
