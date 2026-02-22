@@ -8319,6 +8319,7 @@ bool WeatherRouting::OpenXML(wxString filename, bool reportfailure) {
         configuration.MaxSwellMeters =
             AttributeDouble(e, "MaxSwellMeters", 20.);
         configuration.MaxLatitude = AttributeDouble(e, "MaxLatitude", 90);
+        configuration.UsePerformanceLoss = AttributeBool(e, "UserPerformanceLoss", false);
         configuration.TackingTime = AttributeDouble(e, "TackingTime", 0);
         configuration.JibingTime = AttributeDouble(e, "JibingTime", 0);
         configuration.SailPlanChangeTime =
@@ -8519,6 +8520,7 @@ void WeatherRouting::SaveXML(wxString filename) {
 
     c->SetDoubleAttribute("MaxSwellMeters", configuration.MaxSwellMeters);
     c->SetAttribute("MaxLatitude", configuration.MaxLatitude);
+    c->SetAttribute("UserPerformanceLoss", configuration.UsePerformanceLoss);
     c->SetAttribute("TackingTime", configuration.TackingTime);
     c->SetAttribute("JibingTime", configuration.JibingTime);
     c->SetAttribute("SailPlanChangeTime", configuration.SailPlanChangeTime);
@@ -12149,6 +12151,7 @@ RouteMapConfiguration WeatherRouting::DefaultConfiguration() {
 
   configuration.MaxSwellMeters = 20.;
   configuration.MaxLatitude = 90;
+  configuration.UsePerformanceLoss = false;
   configuration.TackingTime = 0;
   configuration.JibingTime = 0;
   configuration.SailPlanChangeTime = 0;

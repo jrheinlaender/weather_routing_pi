@@ -741,6 +741,7 @@ void ConfigurationDialog::SetConfigurations(
 
   SET_SPIN_DOUBLE(MaxSwellMeters);
   SET_SPIN(MaxLatitude);
+  SET_CHECKBOX(UsePerformanceLoss);
   SET_SPIN(TackingTime);
   SET_SPIN(JibingTime);
   SET_SPIN(SailPlanChangeTime);
@@ -1079,6 +1080,14 @@ void ConfigurationDialog::SetStartDateTime(wxDateTime datetime) {
         m_c##FIELD->Delete(m_c##FIELD->GetCount() - 1);                       \
     }
 
+void ConfigurationDialog::OnUsePerformanceLoss(wxCommandEvent& event) {
+  bool usePerformanceLoss = event.IsChecked();
+  m_sTackingTime->Enable(!usePerformanceLoss);
+  m_sJibingTime->Enable(!usePerformanceLoss);
+  m_sSailPlanChangeTime->Enable(!usePerformanceLoss);
+  Update();
+}
+
 void ConfigurationDialog::OnChartSafetyChanged(wxCommandEvent&) {
   if (m_bBlockUpdate || !m_WeatherRouting.HasEnhancedChartSafety()) return;
   m_WeatherRouting.ApplyChartSafetySettings(
@@ -1264,6 +1273,7 @@ void ConfigurationDialog::Update() {
 
     GET_SPIN(MaxSwellMeters);
     GET_SPIN(MaxLatitude);
+    GET_CHECKBOX(UsePerformanceLoss);
     GET_SPIN(TackingTime);
     GET_SPIN(JibingTime);
     GET_SPIN(SailPlanChangeTime);

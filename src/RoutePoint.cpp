@@ -228,7 +228,7 @@ bool BoatData::GetBoatSpeedForPolar(
     data_mask |= Position::NIGHT_TIME;
   }
 
-  if (!using_motor) {
+  if (!using_motor && configuration.UsePerformanceLoss) {
     // Calculate new performance value
     if ((this->tacked || this->jibed) && performance >= 0.93)
       // Performance loss through tacking or jibing
