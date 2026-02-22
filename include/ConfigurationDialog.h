@@ -156,6 +156,7 @@ protected:
   void UpdateChartSafetyRamLabel();
   void UpdateRoutingTimeModeControls();
   void OnClose(wxCommandEvent& event) { Hide(); }
+  virtual void OnUsePerformanceLoss(wxCommandEvent& event) override;
 
 private:
 #ifdef __OCPN__ANDROID__

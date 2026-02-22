@@ -505,6 +505,7 @@ protected:
   wxStaticText* m_staticText1292;
   wxSpinCtrl* m_sWindStrength;
   wxStaticText* m_staticText1301;
+  wxCheckBox* m_cbUsePerformanceLoss;
   wxStaticText* m_staticText24;
   wxSpinCtrl* m_sTackingTime;
   wxStaticText* m_staticText121;
@@ -551,6 +552,7 @@ protected:
   virtual void OnUseMotor(wxCommandEvent& event) { event.Skip(); }
   virtual void OnUseOptimalAngles(wxCommandEvent& event) { event.Skip(); }
   virtual void OnResetAdvanced(wxCommandEvent& event) { event.Skip(); }
+  virtual void OnUsePerformanceLoss(wxCommandEvent& event) { event.Skip(); }
 
 public:
   wxDatePickerCtrl* m_dpStartDate;
