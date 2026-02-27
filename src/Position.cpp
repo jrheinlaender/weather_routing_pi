@@ -409,10 +409,19 @@ bool Position::Propagate(IsoRouteList& routelist,
 #endif
 
       if (configuration.positive_longitudes && dlon < 0) dlon += 360;
+      /**
+       * Check angle between course from route start to here and course from
+       * route start to route end. Uses rhumb line courses
+       * Determines the limits of the routing area
+       */
       if (!ConstraintChecker::CheckMaxCourseAngleConstraint(configuration, dlat,
                                                             dlon)) {
         continue;
       }
+      /**
+       * Check angle between course from route start to here and course from
+       * here to route end. Uses rhumb line courses
+       */
       if (!ConstraintChecker::CheckMaxDivertedCourse(configuration, dlat,
                                                      dlon)) {
         continue;
