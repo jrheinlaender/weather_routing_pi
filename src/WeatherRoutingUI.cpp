@@ -2334,7 +2334,7 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
 
   m_cbUsePerformanceLoss =
       new wxCheckBox(sbOptions1->GetStaticBox(), wxID_ANY, _("Use performance loss"),
-                     wxDefaultPosition, wxDefaultSize, wxCHK_3STATE);
+                     wxDefaultPosition, wxDefaultSize, wxCHK_2STATE);
   m_cbUsePerformanceLoss->SetToolTip(
       _("When enabled, calculates an averaged performance loss for maneuvers"
         "(tacking, jibing, course change). This allows to create more realistic"
