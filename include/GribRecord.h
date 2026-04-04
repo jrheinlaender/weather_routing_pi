@@ -133,20 +133,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define LV_SIGMA 107
 #define LV_ATMOS_ENT 10
 #define LV_ATMOS_ALL 200
-    //---------------------------------------------------------
-    enum DataCenterModel {
-      NOAA_GFS,
-      NOAA_NCEP_WW3,
-      NOAA_NCEP_SST,
-      NOAA_RTOFS,
-      FNMOC_WW3_GLB,
-      FNMOC_WW3_MED,
-      NORWAY_METNO,
-      ECMWF_ERA5,
-      KNMI_HIRLAM,
-      KNMI_HARMONIE_AROME,
-      OTHER_DATA_CENTER
-    };
+//---------------------------------------------------------
+enum DataCenterModel {
+  NOAA_GFS,
+  NOAA_NCEP_WW3,
+  NOAA_NCEP_SST,
+  NOAA_RTOFS,
+  FNMOC_WW3_GLB,
+  FNMOC_WW3_MED,
+  NORWAY_METNO,
+  ECMWF_ERA5,
+  KNMI_HIRLAM,
+  KNMI_HARMONIE_AROME,
+  OTHER_DATA_CENTER
+};
 
 //----------------------------------------------
 class GribCode {
@@ -173,39 +173,66 @@ public:
  * - Origin point (La1, Lo1) and end point (La2, Lo2)
  * - Number of points in each direction (Ni, Nj)
  * - Grid spacing (Di, Dj)
- * - Data array of size Ni × Nj containing values at each grid point
+ * - Data array of size Ni Ã— Nj containing values at each grid point
  *
  * Features:
  * - Provides spatial interpolation for points between grid points.
  * - Handles vector fields (e.g., wind, currents) with special interpolation
  *   for magnitude and direction.
+ * - Supports bitmap sections for irregular data coverage.
  * - Can be created from file data or generated through temporal/spatial
  *   interpolation.
  * - Derived quantities like wind speed from U/V components.
  * - Unit conversions and statistical calculations.
  *
  */
-
-
 class GribRecord {
 public:
-  /** Default constructor initializes members to safe defaults. */
-  GribRecord();
+  enum InterpolationMethod {
+    /// Use nearest grid value
+    NEAREST = 0,
+    /// Linear interpolation of scalar values
+    // This interpolation looses energy when components of vector fields (wind,
+    // current) are interpolated separately
+    // Example:
+    // Wind at grid point 1: Vector (4 bf North, 3 bf East)
+    // Wind at grid point 2: Vector (4 bf South, 3 bf East)
+    // Interpolated value at midpoint: Vector (0 bf North, 3 bf East) -> Scalar
+    // 3 bf speed and direction E
+    SCALAR = 1,
+    /// Linear interpolation of vector fields
+    // This interpolation converts vectors to polar representation (magnitude
+    // and angle)
+    // Example:
+    // Wind at grid point 1: Vector (4 bf North, 3 bf East) -> Scalar 5 bf speed
+    // and direction 37Â°
+    // Wind at grid point 2: Vector (4 bf South, 3 bf East) -> Scalar 5 bf speed
+    // and direction 143Â°
+    // Interpolated value at midpoint: 5 bf speed and direction E -> Vector (0
+    // bf North, 5 bf E)
+    VECTOR = 2
+  };
+  enum SmoothingMethod {
+    /// Allow jumps in derivative at grid points
+    // Example:
+    // Value at grid point x1: v1
+    // Value at grid point x2: v2
+    // Interpolate at position x1 <= x <= x2
+    // Find k = (x - x1) / (x2 - x1)
+    // Interpolated value: (1 - k) * v1 + k * v2
+    NO_SMOOTHING = 0,
+    /// Attempt to have continous derivatives at grid points
+    // Example:
+    // Calculate k as above, then set k = (3 - 2 * k) * k * k
+    PSEUDO_HERMITE = 1
+  };
 
+public:
   /** Copy constructor performs a deep copy of the GribRecord. */
   GribRecord(const GribRecord& rec);
-  GribRecord(GribRecord&& other) noexcept;
+  GribRecord() { m_bfilled = false; }
 
   virtual ~GribRecord();
-
-  /** Copy assignment - deep copy, exception safe. */
-  GribRecord& operator=(const GribRecord& rec);
-
-  /** Move assignment. */
-  GribRecord& operator=(GribRecord&& other) noexcept;
-
-  /** Swap helper */
-  void swap(GribRecord& other) noexcept;
 
   /**
    * Creates a new GribRecord by temporally interpolating between two time
@@ -219,7 +246,8 @@ public:
    * The interpolation is done value-by-value across the entire grid using:
    * - Linear interpolation for scalar values
    * - Angular interpolation for directional values (when dir=true)
-   *   to properly handle the 0°/360° wrapping
+   *   to properly handle the 0Â°/360Â° wrapping
+   * This corresponds to InterpolationMethod::SCALAR
    *
    * @param rec1 GribRecord at earlier time t1
    * @param rec2 GribRecord at later time t2
@@ -229,6 +257,7 @@ public:
    *          - 0.5 means halfway between rec1 and rec2
    * @param dir If true, treats values as angles in degrees and uses
    *           proper angular interpolation (e.g., for wind direction)
+   * @param sm The smoothing method to apply
    *
    * @return New GribRecord containing the interpolated values, or NULL if:
    *         - Input records have different grid structures
@@ -236,11 +265,13 @@ public:
    *         - Memory allocation fails
    *
    * @note For vector fields (e.g., wind, currents), use Interpolated2DRecord()
-   *       instead to properly handle both components together
+   *       instead to properly handle both components together. This will use
+   *       InterpolationMethod::VECTOR
    */
-  static GribRecord* InterpolatedRecord(const GribRecord& rec1,
-                                        const GribRecord& rec2, double d,
-                                        bool dir = false);
+  static GribRecord* InterpolatedRecord(
+      const GribRecord& rec1, const GribRecord& rec2, double d,
+      const SmoothingMethod sm,  // Default was NO_SMOOTHING
+      bool dir = false);
   /**
    * Creates temporally interpolated records for vector fields (wind, currents).
    *
@@ -251,6 +282,7 @@ public:
    * 2. Interpolates magnitude linearly between times.
    * 3. Interpolates direction using proper angular interpolation.
    * 4. Converts back to X,Y components.
+   * This corresponds to InterpolationMethod::VECTOR
    *
    * @param rety [out] Pointer to store interpolated Y-component record
    * @param rec1x X-component record at earlier time t1 (e.g., wind u-component)
@@ -260,17 +292,17 @@ public:
    * @param d Interpolation factor between [0,1] where:
    *          - 0 returns values from time t1
    *          - 1 returns values from time t2
+   * * @param sm The smoothing method to apply
    *
    * @return Pointer to interpolated X-component record, or NULL if:
    *         - Input records have mismatched grids
    *         - Any input record is invalid
    *         - Memory allocation fails
    */
-  static GribRecord* Interpolated2DRecord(GribRecord*& rety,
-                                          const GribRecord& rec1x,
-                                          const GribRecord& rec1y,
-                                          const GribRecord& rec2x,
-                                          const GribRecord& rec2y, double d);
+  static GribRecord* Interpolated2DRecord(
+      GribRecord*& rety, const GribRecord& rec1x, const GribRecord& rec1y,
+      const GribRecord& rec2x, const GribRecord& rec2y, double d,
+      const SmoothingMethod sm);  // Default was NO_SMOOTHING);
 
   static GribRecord* MagnitudeRecord(const GribRecord& rec1,
                                      const GribRecord& rec2);
@@ -313,6 +345,7 @@ public:
    * @return Parameter type identifier as unsigned char
    *
    * @see The full list of parameter codes is defined at the top of GribRecord.h
+   * @note Parameter definitions can vary between GRIB1 and GRIB2 formats
    */
   zuchar getDataType() const { return dataType; }
   void setDataType(const zuchar t);
@@ -376,7 +409,7 @@ public:
    * - 34: Japanese Meteorological Agency (JMA)
    * - 58: European Centre for Medium-Range Weather Forecasts (ECMWF)
    * - 59: German Weather Service (DWD)
-   * - 85: French Weather Service (Météo-France)
+   * - 85: French Weather Service (MÃ©tÃ©o-France)
    *
    * @return Center identification code as defined in GRIB Table 0
    */
@@ -507,24 +540,33 @@ public:
    *
    * This method performs specialized vector interpolation for meteorological
    * vector fields like wind or ocean currents.
+   * InterpolationMethod::SCALAR is ignored in this function, use
+   * getInterpolatedValues() to achieve this
    *
    * @param px Longitude in degrees.
    * @param py Latitude in degrees.
-   * @param numericalInterpolation Use bilinear interpolation if true.
+   * @param im Interpolation method to use
+   * @param sm Smoothing method to use
    * @param dir Handle directional interpolation if true (e.g. for wind
    * direction).
    * @return Spatially interpolated value or GRIB_NOTDEF if outside grid.
    */
-  double getInterpolatedValue(double px, double py,
-                              bool numericalInterpolation = true,
-                              bool dir = false) const;
+  double getInterpolatedValue(
+      double px, double py,
+      const InterpolationMethod im,  // Default was InterpolationMethod::VECTOR,
+      const SmoothingMethod sm,  // Default was SmoothingMethod::PSEUDO_HERMITE,
+      bool dir = false) const;
 
   /**
    * Gets spatially interpolated wind or current vector values at a specific
    * latitude/longitude point.
    *
-   * Takes X and Y component records and interpolates both magnitude and angle
-   * using bilinear interpolation between grid points.
+   * Takes X and Y component records and interpolates
+   * a) magnitude and angle (InterpolationMethod::VECTOR)
+   * b) components separately (InterpolationMethod::SCALAR)
+   * using bilinear interpolation between grid points. It handles cases where
+   * the requested point might cross the date line by adjusting the longitude if
+   * needed.
    *
    * @param M [out] Vector magnitude at the interpolated point (preserves input
    * units). This is the speed or strength of the wind/current, typically
@@ -537,15 +579,19 @@ public:
    * South-North)
    * @param px [in] Longitude in degrees of the interpolation point.
    * @param py [in] Latitude in degrees of the interpolation point.
-   * @param numericalInterpolation If true, uses bilinear interpolation; if
-   * false, uses nearest neighbor interpolation.
+   * @param im Interpolation method to use
+   * @param sm Smoothing method to use
+   * @return true if interpolation was successful, false if the point is outside
+   * map boundaries or if insufficient valid data points exist for interpolation
    *
    * @note The method expects the input components to follow meteorological
    * conventions where u is positive eastward and v is positive northward
    */
-  static bool getInterpolatedValues(double& M, double& A, const GribRecord* GRX,
-                                    const GribRecord* GRY, double px, double py,
-                                    bool numericalInterpolation = true);
+  static bool getInterpolatedValues(
+      double& M, double& A, const GribRecord* GRX, const GribRecord* GRY,
+      double px, double py,
+      const InterpolationMethod im,  // Default was InterpolationMethod::VECTOR,
+      const SmoothingMethod sm);  // Default was SmoothingMethod::PSEUDO_HERMITE
 
   /**
    * Converts grid index i to longitude in degrees.
@@ -599,7 +645,7 @@ public:
   time_t getRecordRefDate() const { return refDate; }
   const char* getStrRecordRefDate() const { return strRefDate; }
 
-  // Date courante des prévisions
+  // Date courante des prÃ©visions
   time_t getRecordCurrentDate() const { return curDate; }
   const char* getStrRecordCurDate() const { return strCurDate; }
   void setRecordCurrentDate(time_t t);

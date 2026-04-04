@@ -105,7 +105,7 @@ void GribRecord::print() {
 }
 
 //-------------------------------------------------------------------------------
-// Copy constructor (deep copy)
+// Constructeur de recopie
 //-------------------------------------------------------------------------------
 void GribRecord::copyMetadata(const GribRecord& rec) {
   // copy simple/scalar members
@@ -655,6 +655,10 @@ GribRecord *GribRecord::InterpolatedRecord(const GribRecord &rec1,
   double La1, Lo1, La2, Lo2, Di, Dj;
   int im1, jm1, im2, jm2;
   int Ni, Nj, rec1offi, rec1offj, rec2offi, rec2offj;
+  
+  // Apply smoothing method
+  if (sm == SmoothingMethod::PSEUDO_HERMITE) d = (3.0 - 2.0 * d) * d * d;
+  
   if (!GetInterpolatedParameters(rec1, rec2, La1, Lo1, La2, Lo2, Di, Dj, im1,
                                  jm1, im2, jm2, Ni, Nj, rec1offi, rec1offj,
                                  rec2offi, rec2offj))
@@ -726,9 +730,12 @@ GribRecord *GribRecord::InterpolatedRecord(const GribRecord &rec1,
 /* for interpolation for x and y records, we must do them together because
    otherwise we end up with a vector interpolation which is not what we want..
    instead we want to interpolate from the polar magnitude, and angles */
-GribRecord *GribRecord::Interpolated2DRecord(
-    GribRecord *&rety, const GribRecord &rec1x, const GribRecord &rec1y,
-    const GribRecord &rec2x, const GribRecord &rec2y, double d) {
+GribRecord* GribRecord::Interpolated2DRecord(GribRecord*& rety,
+                                             const GribRecord& rec1x,
+                                             const GribRecord& rec1y,
+                                             const GribRecord& rec2x,
+                                             const GribRecord& rec2y, double d,
+                                             const SmoothingMethod sm) {
   double La1, Lo1, La2, Lo2, Di, Dj;
   int im1, jm1, im2, jm2;
   int Ni, Nj, rec1offi, rec1offj, rec2offi, rec2offj;
@@ -743,6 +750,8 @@ GribRecord *GribRecord::Interpolated2DRecord(
     return SpatiallyInterpolated2DRecord(rety, rec1x, rec1y, rec2x, rec2y, d);
 
   // recopie les champs de bits
+  if (sm == SmoothingMethod::PSEUDO_HERMITE)
+    d = (3.0 - 2.0 * d) * d * d;  // pseudo hermite interpolation
   int size = Ni * Nj;
   std::unique_ptr<double[]> valuesX(new double[size]);
   std::unique_ptr<double[]> valuesY(new double[size]);
@@ -810,9 +819,10 @@ GribRecord *GribRecord::Interpolated2DRecord(
   return ret.release();
 }
 
-GribRecord *GribRecord::MagnitudeRecord(const GribRecord &rec1,
-                                        const GribRecord &rec2) {
-  GribRecord *rec = new GribRecord(rec1);
+// TODO Check where this is used
+GribRecord* GribRecord::MagnitudeRecord(const GribRecord& rec1,
+                                        const GribRecord& rec2) {
+  GribRecord* rec = new GribRecord(rec1);
 
   /* generate a record which is the combined magnitude of two records */
   if (rec1.data && rec2.data && rec1.Ni == rec2.Ni && rec1.Nj == rec2.Nj) {
@@ -860,7 +870,7 @@ void GribRecord::Polar2UV(GribRecord *pDIR, GribRecord *pSPEED) {
   }
 }
 
-void GribRecord::Substract(const GribRecord &rec, bool pos) {
+void GribRecord::Substract(const GribRecord& rec, bool pos) {
   // for now only substract records of same size
   if (rec.data == 0 || !rec.isOk()) return;
 
@@ -888,7 +898,7 @@ void GribRecord::Substract(const GribRecord &rec, bool pos) {
 }
 
 //------------------------------------------------------------------------------
-void GribRecord::Average(const GribRecord &rec) {
+void GribRecord::Average(const GribRecord& rec) {
   // for now only average records of same size
   // this : 6-12
   // rec  : 6-9
@@ -933,19 +943,19 @@ std::string GribRecord::makeKey(int dataType, int levelType, int levelValue) {
   return std::string(key);
 }
 //-----------------------------------------
-// GribRecord::~GribRecord() {
-//  if (data) {
-//    delete[] data;
-//    data = nullptr;
-//  }
-//  if (BMSbits) {
-//    delete[] BMSbits;
-//    BMSbits = nullptr;
-//  }
+GribRecord::~GribRecord() {
+  if (data) {
+    delete[] data;
+    data = nullptr;
+  }
+  if (BMSbits) {
+    delete[] BMSbits;
+    BMSbits = nullptr;
+  }
 
   // if (dataType==GRB_TEMP) printf("record destroyed %s   %d\n",
   // dataKey.mb_str(), (int)curDate/3600);
-//}
+}
 
 //-------------------------------------------------------------------------------
 void GribRecord::multiplyAllData(double k) {
@@ -1001,7 +1011,8 @@ time_t GribRecord::makeDate(zuint year, zuint month, zuint day, zuint hour,
 //===============================================================================================
 
 double GribRecord::getInterpolatedValue(double px, double py,
-                                        bool numericalInterpolation,
+                                        const InterpolationMethod im,
+                                        const SmoothingMethod sm,
                                         bool dir) const {
   // The finite grid-coordinate checks below validate the query and spacing
   // before conversion. Only ownership/count need checking here.
@@ -1041,7 +1052,7 @@ double GribRecord::getInterpolatedValue(double px, double py,
   double dx = pi - i0;
   double dy = pj - j0;
 
-  if (!numericalInterpolation) {
+  if (im == InterpolationMethod::NEAREST) {
     if (dx >= 0.5) i0 = i1;
     if (dy >= 0.5) j0 = j1;
 
@@ -1052,9 +1063,12 @@ double GribRecord::getInterpolatedValue(double px, double py,
   // Read that canonical data representation, avoiding a second bitmap scan.
   const double x00 = getValue(i0, j0), x01 = getValue(i0, j1);
   const double x10 = getValue(i1, j0), x11 = getValue(i1, j1);
-  dx = (3.0 - 2.0 * dx) * dx * dx;  // pseudo hermite interpolation
-  dy = (3.0 - 2.0 * dy) * dy * dy;
-
+  
+  if (sm == SmoothingMethod::PSEUDO_HERMITE) {
+    dx = (3.0 - 2.0 * dx) * dx * dx;  // pseudo hermite interpolation
+    dy = (3.0 - 2.0 * dy) * dy * dy;
+  }
+  
   double xa, xb, xc, kx, ky;
   // Triangle :
   //   xa  xb
@@ -1125,10 +1139,11 @@ double GribRecord::getInterpolatedValue(double px, double py,
   return k2 * vx + (1 - k2) * vy;
 }
 
-bool GribRecord::getInterpolatedValues(double &M, double &A,
-                                       const GribRecord *GRX,
-                                       const GribRecord *GRY, double px,
-                                       double py, bool numericalInterpolation) {
+bool GribRecord::getInterpolatedValues(double& M, double& A,
+                                       const GribRecord* GRX,
+                                       const GribRecord* GRY, double px,
+                                       double py, const InterpolationMethod im,
+                                       const SmoothingMethod sm) {
   if (!GRX || !GRY) return false;
 
   if (!GRX->ok || !GRY->ok || !GRX->data || !GRY->data ||
@@ -1168,7 +1183,7 @@ bool GribRecord::getInterpolatedValues(double &M, double &A,
   double dx = pi - i0;
   double dy = pj - j0;
 
-  if (!numericalInterpolation) {
+  if (im == InterpolationMethod::NEAREST) {
     double vx, vy;
     if (dx >= 0.5) i0 = i1;
     if (dy >= 0.5) j0 = j1;
@@ -1190,8 +1205,10 @@ bool GribRecord::getInterpolatedValues(double &M, double &A,
       x11x == GRIB_NOTDEF || x00y == GRIB_NOTDEF || x01y == GRIB_NOTDEF ||
       x10y == GRIB_NOTDEF || x11y == GRIB_NOTDEF) return false;
 
-  dx = (3.0 - 2.0 * dx) * dx * dx;  // pseudo hermite interpolation
-  dy = (3.0 - 2.0 * dy) * dy * dy;
+  if (sm == SmoothingMethod::PSEUDO_HERMITE) {
+    dx = (3.0 - 2.0 * dx) * dx * dx;  // pseudo hermite interpolation
+    dy = (3.0 - 2.0 * dy) * dy * dy;
+  }
 
   // Triangle :
   //   xa  xb
@@ -1199,22 +1216,35 @@ bool GribRecord::getInterpolatedValues(double &M, double &A,
   // kx = distance(xa,x)
   // ky = distance(xa,y)
   {
-    double x00m = sqrt(x00x * x00x + x00y * x00y), x00a = atan2(x00x, x00y);
+    if (im == GribRecord::VECTOR) {
+      double x00m = sqrt(x00x * x00x + x00y * x00y), x00a = atan2(x00x, x00y);
+      double x01m = sqrt(x01x * x01x + x01y * x01y), x01a = atan2(x01x, x01y);
+      double x10m = sqrt(x10x * x10x + x10y * x10y), x10a = atan2(x10x, x10y);
+      double x11m = sqrt(x11x * x11x + x11y * x11y), x11a = atan2(x11x, x11y);
 
-    double x01m = sqrt(x01x * x01x + x01y * x01y), x01a = atan2(x01x, x01y);
+      double x0m = (1 - dx) * x00m + dx * x10m,
+             x0a = interp_angle(x00a, x10a, dx, kPi);
 
-    double x10m = sqrt(x10x * x10x + x10y * x10y), x10a = atan2(x10x, x10y);
+      double x1m = (1 - dx) * x01m + dx * x11m,
+             x1a = interp_angle(x01a, x11a, dx, kPi);
 
-    double x11m = sqrt(x11x * x11x + x11y * x11y), x11a = atan2(x11x, x11y);
+      M = (1 - dy) * x0m + dy * x1m;
+      A = interp_angle(x0a, x1a, dy, kPi);
+    } else {
+      // Interpolation horizontal
+      double x0x = (1 - dx) * x00x + dx * x10x;
+      double x1x = (1 - dx) * x01x + dx * x11x;
+      double x0y = (1 - dx) * x00y + dx * x10y;
+      double x1y = (1 - dx) * x01y + dx * x11y;
 
-    double x0m = (1 - dx) * x00m + dx * x10m,
-           x0a = interp_angle(x00a, x10a, dx, kPi);
+      // Interpolation vertical
+      double xx = (1 - dy) * x0x + dy * x1x;
+      double yy = (1 - dy) * x0y + dy * x1y;
 
-    double x1m = (1 - dx) * x01m + dx * x11m,
-           x1a = interp_angle(x01a, x11a, dx, kPi);
+      M = sqrt(xx * xx + yy * yy);
+      A = atan2(xx, yy);
+    }
 
-    M = (1 - dy) * x0m + dy * x1m;
-    A = interp_angle(x0a, x1a, dy, kPi);
     A *= 180 / kPi;  // degrees
     A += 180;
 
@@ -1225,6 +1255,11 @@ bool GribRecord::getInterpolatedValues(double &M, double &A,
 #if 0
         double xa, xb, xc, kx, ky;
         // here nbval==3, check the corner without data
+        // Triangle :
+        //   xa  xb
+        //   xc
+        // kx = distance(xa,x)
+        // ky = distance(xa,y)
         if (!h00) {
             //printf("! h00  %f %f\n", dx,dy);
             xa = getValue(i1, j1);   // A = point 11
@@ -1271,7 +1306,7 @@ bool GribRecord::getInterpolatedValues(double &M, double &A,
         double vy = k*xc + (1-k)*xa;
         // diagonal interpolation
         double k2 = kx / k;
-        val =  k2*vx + (1-k2) * vy;
+        val =  k2*vx + (1-k2)*vy;
     }
     return val;
 #endif
