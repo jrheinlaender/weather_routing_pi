@@ -1001,7 +1001,6 @@ SettingsDialogBase::SettingsDialogBase(wxWindow* parent, wxWindowID id,
   m_stMemoryUsagePercent->SetFont(m_stMemoryUsagePercent->GetFont().Bold());
   sbSizer30->Add(m_stMemoryUsagePercent, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
   */
- 
 
   sbSizer30->Add(usageSizer, 0, wxEXPAND, 5);
 
@@ -1014,7 +1013,6 @@ SettingsDialogBase::SettingsDialogBase(wxWindow* parent, wxWindowID id,
 
   // Add the memory monitor sizer to the parent
   fgSizer18->Add(sbSizer30, 1, wxEXPAND | wxALL, 5);
-
 
   m_scrolledWindow4->SetSizer(fgSizer18);
   m_scrolledWindow4->Layout();
@@ -1913,6 +1911,62 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
   sbMotor->Add(fgSizerMotor, 1, wxEXPAND, 5);
   fgSizerLeftColumn->Add(sbMotor, 0, wxEXPAND | wxALL, 5);
 
+  // Adaptive timestep section
+  wxStaticBoxSizer* sbAdaptiveTimestep;
+  sbAdaptiveTimestep = new wxStaticBoxSizer(
+      new wxStaticBox(m_pAdvanced, wxID_ANY, _("Adaptive timestep")),
+      wxVERTICAL);
+
+  wxFlexGridSizer* fgSizerAdaptiveTS;
+  fgSizerAdaptiveTS = new wxFlexGridSizer(0, 1, 0, 0);
+  fgSizerAdaptiveTS->SetFlexibleDirection(wxBOTH);
+  fgSizerAdaptiveTS->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+  m_cbAdaptiveTimestep = new wxCheckBox(sbAdaptiveTimestep->GetStaticBox(),
+                                        wxID_ANY, _("Use adaptive timestep"),
+                                        wxDefaultPosition, wxDefaultSize, 0);
+  m_cbAdaptiveTimestep->SetToolTip(
+      _("Reduce or increase the timestep depending on certain conditions."));
+  fgSizerAdaptiveTS->Add(m_cbAdaptiveTimestep, 0, wxALL, 5);
+
+  wxFlexGridSizer* fgSizer11512;
+  fgSizer11512 = new wxFlexGridSizer(1, 0, 0, 0);
+  fgSizer11512->SetFlexibleDirection(wxBOTH);
+  fgSizer11512->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
+
+  m_staticText242 =
+      new wxStaticText(sbAdaptiveTimestep->GetStaticBox(), wxID_ANY,
+                       _("Initial and final time step at source / destination"),
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_staticText242->Wrap(-1);
+  fgSizer11512->Add(m_staticText242, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+  m_sMinimumTimestep =
+      new wxSlider(sbAdaptiveTimestep->GetStaticBox(), wxID_ANY, 10, 1, 100);
+  m_sMinimumTimestep->SetToolTip(
+      _("When leaving the source, this is the initial time step. It will be "
+        "increased up to the full timestep. Similarly, on approaching the "
+        "destination, the full timestep will be slowly reduced to the "
+        "initial value"));
+  m_sMinimumTimestep->Enable(false);
+  fgSizer11512->Add(m_sMinimumTimestep, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+
+  m_tMinimumTimestep =
+      new wxStaticText(sbAdaptiveTimestep->GetStaticBox(), wxID_ANY, "10.00",
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_tMinimumTimestep->Wrap(-1);
+  fgSizer11512->Add(m_tMinimumTimestep, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+  m_staticText1212 =
+      new wxStaticText(sbAdaptiveTimestep->GetStaticBox(), wxID_ANY, _("min"),
+                       wxDefaultPosition, wxDefaultSize, 0);
+  m_staticText1212->Wrap(-1);
+  fgSizer11512->Add(m_staticText1212, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+  fgSizerAdaptiveTS->Add(fgSizer11512, 1, wxEXPAND, 5);
+
+  sbAdaptiveTimestep->Add(fgSizerAdaptiveTS, 1, wxEXPAND, 5);
+  fgSizerLeftColumn->Add(sbAdaptiveTimestep, 0, wxEXPAND | wxALL, 5);
+
   // Grid container for "Options", "Courses", "Polar Efficiency" sections
   wxFlexGridSizer* fgSizer109;
   fgSizer109 = new wxFlexGridSizer(3, 0, 0, 0);
@@ -2016,9 +2070,9 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
 
   fgSizer113->Add(fgSizer1071, 1, wxEXPAND, 5);
 
-  m_cbUsePerformanceLoss =
-      new wxCheckBox(sbOptions1->GetStaticBox(), wxID_ANY, _("Use performance loss"),
-                     wxDefaultPosition, wxDefaultSize, wxCHK_2STATE);
+  m_cbUsePerformanceLoss = new wxCheckBox(
+      sbOptions1->GetStaticBox(), wxID_ANY, _("Use performance loss"),
+      wxDefaultPosition, wxDefaultSize, wxCHK_2STATE);
   m_cbUsePerformanceLoss->SetToolTip(
       _("When enabled, calculates an averaged performance loss for maneuvers"
         "(tacking, jibing, course change). This allows to create more realistic"
@@ -2296,10 +2350,9 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
                                wxSize(140, -1), wxSP_ARROW_KEYS, 0, 180, 180);
   bSizer4->Add(m_sToDegree, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
-  m_cbUseOptimalAngles =
-      new wxCheckBox(sbCourses->GetStaticBox(), wxID_ANY,
-                     _("Use optimal angles"), wxDefaultPosition,
-                     wxDefaultSize, wxCHK_2STATE);
+  m_cbUseOptimalAngles = new wxCheckBox(
+      sbCourses->GetStaticBox(), wxID_ANY, _("Use optimal angles"),
+      wxDefaultPosition, wxDefaultSize, wxCHK_2STATE);
   m_cbUseOptimalAngles->SetToolTip(
       _("When enabled, uses the optimal upwind and downwind angles "
         "calculated from the boat's polar instead of fixed values."));
@@ -2763,7 +2816,8 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
   m_cbUsePerformanceLoss->Connect(
       wxEVT_COMMAND_CHECKBOX_CLICKED,
-      wxCommandEventHandler(ConfigurationDialogBase::OnUsePerformanceLoss), NULL, this);
+      wxCommandEventHandler(ConfigurationDialogBase::OnUsePerformanceLoss),
+      NULL, this);
   m_sTackingTime->Connect(
       wxEVT_LEFT_DOWN, wxMouseEventHandler(ConfigurationDialogBase::EnableSpin),
       NULL, this);
@@ -2949,9 +3003,12 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
   m_sSafetyMarginLand->Connect(
       wxEVT_COMMAND_SPINCTRLDOUBLE_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
-  m_sMinReductionPercent->Connect(
-      wxEVT_COMMAND_SPINCTRL_UPDATED,
-      wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
+  m_cbAdaptiveTimestep->Connect(
+      wxEVT_COMMAND_CHECKBOX_CLICKED,
+      wxCommandEventHandler(ConfigurationDialogBase::OnUpdate), NULL, this);
+  m_sMinimumTimestep->Connect(
+      wxEVT_SLIDER, wxCommandEventHandler(ConfigurationDialogBase::OnUpdate),
+      NULL, this);
   m_sUpwindEfficiency->Connect(
       wxEVT_COMMAND_SPINCTRL_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
@@ -2969,7 +3026,8 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
   m_cbUseOptimalAngles->Connect(
       wxEVT_COMMAND_CHECKBOX_CLICKED,
-      wxCommandEventHandler(ConfigurationDialogBase::OnUseOptimalAngles), NULL, this);
+      wxCommandEventHandler(ConfigurationDialogBase::OnUseOptimalAngles), NULL,
+      this);
   m_sByDegrees->Connect(
       wxEVT_COMMAND_SPINCTRLDOUBLE_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
@@ -3399,7 +3457,8 @@ ConfigurationDialogBase::~ConfigurationDialogBase() {
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
   m_cbUsePerformanceLoss->Disconnect(
       wxEVT_COMMAND_CHECKBOX_CLICKED,
-      wxCommandEventHandler(ConfigurationDialogBase::OnUsePerformanceLoss), NULL, this);
+      wxCommandEventHandler(ConfigurationDialogBase::OnUsePerformanceLoss),
+      NULL, this);
   m_sTackingTime->Disconnect(
       wxEVT_LEFT_DOWN, wxMouseEventHandler(ConfigurationDialogBase::EnableSpin),
       NULL, this);
@@ -3590,9 +3649,12 @@ ConfigurationDialogBase::~ConfigurationDialogBase() {
   m_sSafetyMarginLand->Disconnect(
       wxEVT_COMMAND_SPINCTRLDOUBLE_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
-  m_sMinReductionPercent->Disconnect(
-      wxEVT_COMMAND_SPINCTRL_UPDATED,
-      wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);
+  m_cbAdaptiveTimestep->Disconnect(
+      wxEVT_COMMAND_CHECKBOX_CLICKED,
+      wxCommandEventHandler(ConfigurationDialogBase::OnUpdate), NULL, this);
+  m_sMinimumTimestep->Disconnect(
+      wxEVT_SLIDER, wxCommandEventHandler(ConfigurationDialogBase::OnUpdate),
+      NULL, this);
   m_sUpwindEfficiency->Disconnect(
       wxEVT_COMMAND_SPINCTRL_UPDATED,
       wxSpinEventHandler(ConfigurationDialogBase::OnUpdateSpin), NULL, this);

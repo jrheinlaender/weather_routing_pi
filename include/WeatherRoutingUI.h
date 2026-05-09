@@ -30,6 +30,7 @@
 #include <wx/stattext.h>
 #include <wx/clrpicker.h>
 #include <wx/spinctrl.h>
+#include <wx/slider.h>
 #include <wx/checkbox.h>
 #include <wx/scrolwin.h>
 #include <wx/checklst.h>
@@ -472,7 +473,9 @@ protected:
   wxSpinCtrlDouble* m_sSafetyMarginLand;
   wxStaticText* m_staticText1211;
   wxStaticText* m_staticText242;
-  wxSpinCtrl* m_sMinReductionPercent;
+  wxCheckBox* m_cbAdaptiveTimestep;
+  wxSlider* m_sMinimumTimestep;
+  wxStaticText* m_tMinimumTimestep;
   wxStaticText* m_staticText1212;
   wxStaticText* m_staticText113;
   wxStaticText* m_staticText115;
@@ -516,11 +519,11 @@ public:
       m_sDownwindEfficiency;  // !<Efficiency coefficient for downwind sailing
   wxSpinCtrl* m_sNightCumulativeEfficiency;  //!< Efficiency coefficient for
                                              //!< night sailing
-  wxSpinCtrl* m_sFromDegree;  //!< Minimum course relative to true wind.
-  wxSpinCtrl* m_sToDegree;    //!< Maximum course relative to true wind.
-  wxCheckBox* m_cbUseOptimalAngles; //!< Use polar optimal angles for minimum
-                                    //!< and maximum course relative to true
-                                    //<! wind
+  wxSpinCtrl* m_sFromDegree;         //!< Minimum course relative to true wind.
+  wxSpinCtrl* m_sToDegree;           //!< Maximum course relative to true wind.
+  wxCheckBox* m_cbUseOptimalAngles;  //!< Use polar optimal angles for minimum
+                                     //!< and maximum course relative to true
+                                     //<! wind
   /** The increment course angle when calculating a isochrone route. */
   wxSpinCtrlDouble* m_sByDegrees;
 
@@ -533,7 +536,7 @@ public:
       wxWindow* parent, wxWindowID id = wxID_ANY,
       const wxString& title = _("Weather Routing Configuration"),
       const wxPoint& pos = wxDefaultPosition,
-      const wxSize& size = wxSize(-1, -1), 
+      const wxSize& size = wxSize(-1, -1),
       long style = wxDEFAULT_DIALOG_STYLE | wxMAXIMIZE_BOX | wxMINIMIZE_BOX);
   ~ConfigurationDialogBase();
 };

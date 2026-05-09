@@ -478,7 +478,7 @@ double RouteMap::DetermineDeltaTime() {
     // Calculate gradual reduction factors
 
     // For starting point: gradually increase from minReductionFactor to 1.0
-    if (minRedFact < 1.0 && maxDistFromStart < proximityThreshold) {
+    if (minReductionFactor < 1.0 && maxDistFromStart < proximityThreshold) {
       // As we move away from the start, the time step increases.
       startReductionFactor =
           minReductionFactor +
@@ -486,7 +486,7 @@ double RouteMap::DetermineDeltaTime() {
     }
 
     // For destination: gradually decrease from 1.0 to minReductionFactor
-    if (minRedFact < 1.0 && minDistToEnd < proximityThreshold) {
+    if (minReductionFactor < 1.0 && minDistToEnd < proximityThreshold) {
       // As we get closer to the destination, the time step decreases.
       endReductionFactor =
           minReductionFactor +
