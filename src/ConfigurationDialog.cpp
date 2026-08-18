@@ -286,7 +286,7 @@ void ConfigurationDialog::SetConfigurations(
   if (it != configurations.end()) {
     // Date part: only set if valid (avoid MSW assert), otherwise set "none"
     // only when the control supports wxDP_ALLOWNONE
-    wxDateTime dateVal = it->StartTime.GetDateOnly();  // No conversion here
+    wxDateTime dateVal = it->StartTime;
     wxSize s(m_dpStartDate->GetSize());
     if (dateVal.IsValid()) {
       // SetValue() assumes dateVal is UTC and converts to local time for GUI
@@ -434,7 +434,6 @@ void ConfigurationDialog::SetConfigurations(
   SET_SPIN(CycloneMonths);
   SET_SPIN(CycloneDays);
   SET_SPIN_DOUBLE(SafetyMarginLand);
-  SET_SPIN_VALUE(MinReductionPercent, (int)((*it).MinReductionFactor * 100));
 
   if ((*it).MinReductionFactor < 1.0 && (*it).MinReductionFactor >= 0.1) {
     m_cbAdaptiveTimestep->SetValue(true);

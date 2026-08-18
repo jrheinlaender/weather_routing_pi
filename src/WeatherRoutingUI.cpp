@@ -2010,10 +2010,6 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
       _("When enabled, allows the boat to remain stationary (anchor) during "
         "routing calculations. This can create routes with strategic waiting "
         "periods for better weather conditions."));
-  m_cbAnchoring->SetToolTip(
-      _("When enabled, allows the boat to remain stationary (anchor) during "
-        "routing calculations. This can create routes with strategic waiting "
-        "periods when facing strong currents."));
   fgSizer1121->Add(m_cbAnchoring, 0, wxALL, 5);
 
   fgSizer113->Add(fgSizer1121, 1, wxEXPAND, 5);
@@ -2204,36 +2200,6 @@ ConfigurationDialogBase::ConfigurationDialogBase(wxWindow* parent,
   fgSizer11511->Add(m_staticText1211, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 
   fgSizer113->Add(fgSizer11511, 1, wxEXPAND, 5);
-
-  wxFlexGridSizer* fgSizer11512;
-  fgSizer11512 = new wxFlexGridSizer(1, 0, 0, 0);
-  fgSizer11512->SetFlexibleDirection(wxBOTH);
-  fgSizer11512->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
-
-  m_staticText242 = new wxStaticText(
-      sbOptions1->GetStaticBox(), wxID_ANY,
-      _("Minimum time step percentage at source and destination"),
-      wxDefaultPosition, wxDefaultSize, 0);
-  m_staticText242->Wrap(-1);
-  fgSizer11512->Add(m_staticText242, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-
-  m_sMinReductionPercent = new wxSpinCtrl(
-      sbOptions1->GetStaticBox(), wxID_ANY, wxEmptyString, wxDefaultPosition,
-      wxSize(140, -1), wxSP_ARROW_KEYS, 10, 100, 5);
-  m_sMinReductionPercent->SetToolTip(
-      _("When leaving the source or approaching the destination, the current "
-        "time step is multiplied by a factor. Specifiy the minimum value for "
-        "this factor. A value of 100% turns off the feature"));
-  fgSizer11512->Add(m_sMinReductionPercent, 0, wxALL | wxALIGN_CENTER_VERTICAL,
-                    5);
-
-  m_staticText1212 =
-      new wxStaticText(sbOptions1->GetStaticBox(), wxID_ANY, _("%"),
-                       wxDefaultPosition, wxDefaultSize, 0);
-  m_staticText1212->Wrap(-1);
-  fgSizer11512->Add(m_staticText1212, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-
-  fgSizer113->Add(fgSizer11512, 1, wxEXPAND, 5);
 
   sbOptions1->Add(fgSizer113, 1, wxEXPAND, 5);
 

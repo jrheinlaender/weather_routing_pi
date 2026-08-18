@@ -361,6 +361,10 @@ bool ConstraintChecker::CheckMaxTrueWindConstraint(
 bool ConstraintChecker::CheckMaxApparentWindConstraint(
     RouteMapConfiguration& configuration, double stw, double twa,
     double twsOverWater, PropagationError& error_code) {
+  // Allow turning off the check
+  if (configuration.MaxApparentWindKnots > 100.0)
+      return true;
+
   if (stw + twsOverWater > configuration.MaxApparentWindKnots &&
       Polar::VelocityApparentWind(stw, twa, twsOverWater) >
           configuration.MaxApparentWindKnots) {

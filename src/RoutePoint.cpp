@@ -264,12 +264,14 @@ bool BoatData::GetBoatSpeedForPolar(RouteMapConfiguration& configuration,
       newperformance = performance * (1.0 - std::fabs(parent_heading - twa) /
                                                 180.0 * M_PI / 25.0);
 
+    // Performance optimization ensures that it never falls below 93%
+    newperformance = std::max(newperformance, 0.93);
 
     if (newperformance < 1.0 && timeseconds > 0.0) {
         // Performance recovery, probably happens in every server jump even when
         // there is a loss. Calculation assumes that loss is calculated right at the
         // beginning of the jump, but it may be at any time during the jump
-        double jump = std::min(timeseconds, 30.0); // TODO Find correct value for jump
+        double jump = std::min(timeseconds, 10.0);
         double current_stw = this->stw * newperformance;
         double current_time;
         double current_dist = 0.0;
