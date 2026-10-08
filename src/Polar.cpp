@@ -1151,6 +1151,25 @@ void Polar::RemoveWindSpeed(int index) {
   UpdateSpeeds();
 }
 
+const std::vector<double>& Polar::GetDegreeSteps() const {
+  return degree_steps;
+}
+
+std::vector<double> Polar::GetWindSpeeds() const {
+  std::vector<double> result;
+
+  for (const auto& s : wind_speeds) result.emplace_back(s.tws);
+
+  return result;
+}
+
+const std::vector<float>& Polar::GetSpeeds(const double tws) const {
+  for (const auto& s : wind_speeds)
+    if (std::fabs(s.tws - tws) < 1E-3) return s.speeds;
+
+  return wind_speeds.front().speeds;
+}
+
 wxString Polar::GetPolarStatusMessage(PolarSpeedStatus error) {
   switch (error) {
     case POLAR_SPEED_SUCCESS:

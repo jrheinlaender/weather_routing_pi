@@ -805,6 +805,30 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
   request.vessel.propulsion.configuredMotorSpeedKnots =
       configuration.MotorSpeed;
 
+  size_t p_idx = 0;
+
+  for (const auto& p : configuration.boat.Polars) {
+    wr::PerformanceProfile profile{
+        wr::ProfileRole::SailOnly, "polar:" + std::to_string(p_idx++),
+        false, "", {}, {}, 1.0
+    };
+
+
+    for (double tws : p.GetWindSpeeds()) {
+      std::vector<float> speeds = p.GetSpeeds(tws);
+      wr::PolarRow row;
+      row.trueWindSpeedKnots = tws;
+      size_t speed = 0;
+
+      for (const double twa : p.GetDegreeSteps())
+        row.points.emplace_back(wr::PolarPoint{twa, speeds[speed++]});
+
+      profile.rows.emplace_back(std::move(row));
+    }
+
+    request.vessel.profiles.emplace_back(profile);
+  }
+
   request.environment.useWind = true;
   request.environment.useCurrent = configuration.Currents;
   request.environment.useWaves = configuration.UseGrib;

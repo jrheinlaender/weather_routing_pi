@@ -454,6 +454,11 @@ public:
   void AddWindSpeed(double tws);
   void RemoveWindSpeed(int index);
 
+  /// Methods to extract raw polar data
+  const std::vector<double>& GetDegreeSteps() const;
+  std::vector<double> GetWindSpeeds() const;
+  const std::vector<float>& GetSpeeds(const double tws) const;
+
   // Crossover region configuration
   double m_crossoverpercentage;
 
