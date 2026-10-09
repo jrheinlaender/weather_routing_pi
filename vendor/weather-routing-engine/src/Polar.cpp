@@ -8,12 +8,14 @@ namespace supercpn::weather_routing {
 namespace {
 double rowSpeed(const PolarRow& row, double angle) {
   angle = std::clamp(std::abs(angle), 0.0, 180.0);
-  auto upper = std::lower_bound(row.points.begin(), row.points.end(), angle,
-                                [](const PolarPoint& point, double value) {
-                                  return point.trueWindAngleDegrees < value;
-                                });
-  if (upper == row.points.begin()) return upper->boatSpeedKnots;
-  if (upper == row.points.end()) return row.points.back().boatSpeedKnots;
+  auto upper =
+      std::lower_bound(row.GetPoints().begin(), row.GetPoints().end(), angle,
+                       [](const PolarPoint& point, double value) {
+                         return point.trueWindAngleDegrees < value;
+                       });
+  if (upper == row.GetPoints().begin()) return upper->boatSpeedKnots;
+  if (upper == row.GetPoints().end())
+    return row.GetPoints().back().boatSpeedKnots;
   const auto& high = *upper;
   const auto& low = *(upper - 1);
   const double span = high.trueWindAngleDegrees - low.trueWindAngleDegrees;
@@ -60,13 +62,12 @@ bool PolarPerformanceModel::validateProfile(const PerformanceProfile& profile,
   if (profile.rows.empty()) return fail("profile has no wind-speed rows");
   double previousWind = -1.0;
   for (const auto& row : profile.rows) {
-    if (!std::isfinite(row.trueWindSpeedKnots) ||
-        row.trueWindSpeedKnots <= previousWind)
+    if (!std::isfinite(row.GetTws()) || row.GetTws() <= previousWind)
       return fail("true wind speeds must be finite and strictly increasing");
-    if (row.points.size() < 2)
+    if (row.GetPoints().size() < 2)
       return fail("each polar row needs at least two angles");
     double previousAngle = -1.0;
-    for (const auto& point : row.points) {
+    for (const auto& point : row.GetPoints()) {
       if (!std::isfinite(point.trueWindAngleDegrees) ||
           !std::isfinite(point.boatSpeedKnots) ||
           point.trueWindAngleDegrees < 0.0 ||
@@ -77,7 +78,7 @@ bool PolarPerformanceModel::validateProfile(const PerformanceProfile& profile,
             "polar angles/speeds are invalid or not strictly increasing");
       previousAngle = point.trueWindAngleDegrees;
     }
-    previousWind = row.trueWindSpeedKnots;
+    previousWind = row.GetTws();
   }
   if (!std::isfinite(profile.efficiency) || profile.efficiency <= 0.0)
     return fail("profile efficiency must be positive");
@@ -120,16 +121,14 @@ const PerformanceProfile* PolarPerformanceModel::profile(
 double PolarPerformanceModel::interpolate(const PerformanceProfile& profile,
                                           double tws, double twa) {
   if (profile.rows.empty()) return std::numeric_limits<double>::quiet_NaN();
-  auto upper = std::lower_bound(profile.rows.begin(), profile.rows.end(), tws,
-                                [](const PolarRow& row, double value) {
-                                  return row.trueWindSpeedKnots < value;
-                                });
+  auto upper = std::lower_bound(
+      profile.rows.begin(), profile.rows.end(), tws,
+      [](const PolarRow& row, double value) { return row.GetTws() < value; });
   if (upper == profile.rows.begin()) return rowSpeed(*upper, twa);
   if (upper == profile.rows.end()) return rowSpeed(profile.rows.back(), twa);
   const auto& high = *upper;
   const auto& low = *(upper - 1);
-  const double factor = (tws - low.trueWindSpeedKnots) /
-                        (high.trueWindSpeedKnots - low.trueWindSpeedKnots);
+  const double factor = (tws - low.GetTws()) / (high.GetTws() - low.GetTws());
   return rowSpeed(low, twa) +
          factor * (rowSpeed(high, twa) - rowSpeed(low, twa));
 }

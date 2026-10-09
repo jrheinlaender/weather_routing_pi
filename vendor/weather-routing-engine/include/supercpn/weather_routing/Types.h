@@ -121,9 +121,18 @@ struct PolarPoint {
   double boatSpeedKnots{};
 };
 
-struct PolarRow {
-  double trueWindSpeedKnots{};
-  std::vector<PolarPoint> points;
+class PolarRow {
+public:
+  PolarRow() { m_optimal_angles = std::make_shared<OptimalAngles>(); }
+
+  double GetTws() const { return m_tws_knots; }
+  void SetTws(double tws) { m_tws_knots = std::move(tws); }
+  void AddPoint(PolarPoint p) { m_points.emplace_back(std::move(p)); }
+  const std::vector<PolarPoint>& GetPoints() const { return m_points; }
+
+private:
+  double m_tws_knots{};
+  std::vector<PolarPoint> m_points;
 };
 
 struct WavePerformancePoint {
