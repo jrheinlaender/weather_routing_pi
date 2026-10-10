@@ -295,6 +295,8 @@ struct RoutingOptions {
   unsigned labelsPerCell{8};
   bool adaptiveTimeStep{true};
   bool adaptiveHeadings{true};
+  // Use optimal angles from boat polar to limit search angle values
+  bool optimalAngles{false};
   bool adaptiveFrontierDensity{true};
   bool useReverseRecovery{true};
   bool useFrontierRecovery{true};

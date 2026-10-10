@@ -14,6 +14,8 @@
 
 #include "RoutingInternal.h"
 #include "MotionKernel.h"
+#include "supercpn/weather_routing/Providers.h"
+#include "supercpn/weather_routing/Types.h"
 
 namespace supercpn::weather_routing {
 namespace {
@@ -183,8 +185,15 @@ double stateCost(const RoutingRequest& request, const Node& node) {
   }
 }
 
+using OptimalAngles::Angle::STARBOARD_UPWIND;
+using OptimalAngles::Angle::STARBOARD_DOWNWIND;
+using OptimalAngles::Angle::PORT_DOWNWIND;
+using OptimalAngles::Angle::PORT_UPWIND;
+
 std::vector<double> headings(double step, double bearing, bool adaptive,
-                             double refinedStep, double maximumSearchAngle) {
+                             double refinedStep, double maximumSearchAngle,
+                             const std::shared_ptr<OptimalAngles> p_angles,
+                             const double twd) {
   std::set<int> values;
   auto add = [&](double value) {
     values.insert(
@@ -195,8 +204,24 @@ std::vector<double> headings(double step, double bearing, bool adaptive,
     const double heading = i * step;
     if (heading < 360.0 - 1e-9 &&
         std::abs(angularDifferenceDegrees(bearing, heading)) <=
+            maximumSearchAngle + 1e-9) {
+      if (p_angles != nullptr) {
+        double twa = normalizeHeading(twd - heading);
+        if ((twa >= p_angles->at(STARBOARD_UPWIND) &&
+            twa <= p_angles->at(STARBOARD_DOWNWIND)) ||
+           (twa >= p_angles->at(PORT_DOWNWIND) &&
+            twa <= p_angles->at(PORT_UPWIND)))
+          add(heading);
+      }
+    }
+  }
+  if (p_angles != nullptr) {
+    for (const auto& a : OptimalAngles::All) {
+      double heading = normalizeHeading(twd - p_angles->at(a));
+      if (std::abs(angularDifferenceDegrees(bearing, heading)) <=
             maximumSearchAngle + 1e-9)
-      add(heading);
+        add(heading);
+    }
   }
   add(bearing);
   if (adaptive) {
@@ -1413,10 +1438,24 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
       const std::size_t candidatesBefore = candidates.size();
       const double bearing =
           initialBearingDegrees(from.position, request.destination);
+
+      std::shared_ptr<OptimalAngles> angles{nullptr};
+      double twd{NAN};
+
+      if (request.options.optimalAngles) {
+        const auto resolved = internal::resolveEnvironment(
+            request, environment, from.position, from.time);
+        double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+        twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+        angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+            ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+      }
+
       for (double heading :
            headings(layerHeadingStep, bearing, request.options.adaptiveHeadings,
                     request.options.refinedHeadingStepDegrees,
-                    request.options.maximumSearchAngleDegrees)) {
+                    request.options.maximumSearchAngleDegrees,
+                    angles, twd)) {
         workerProgress.tick(request, RoutingProgressStage::ForwardIsochrone,
                             diagnostics, attempt, totalAttempts);
         // Exploratory propagation is independently replayed at a dense
@@ -1574,11 +1613,25 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
         const Node& from = result.nodes[index];
         const double bearing =
             initialBearingDegrees(from.position, request.destination);
+
+        std::shared_ptr<OptimalAngles> angles{nullptr};
+        double twd{NAN};
+
+        if (request.options.optimalAngles) {
+            const auto resolved = internal::resolveEnvironment(
+                request, environment, from.position, from.time);
+            double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+            twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+            angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+                ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+        }
+
         for (double heading : headings(
                  request.options.refinedHeadingStepDegrees, bearing,
                  request.options.adaptiveHeadings,
                  request.options.refinedHeadingStepDegrees,
-                 request.options.maximumSearchAngleDegrees)) {
+                 request.options.maximumSearchAngleDegrees,
+                 angles, twd)) {
           if (generatedLimitReached) break;
           workerProgress.tick(request,
                               RoutingProgressStage::ForwardIsochrone,
@@ -2525,10 +2578,24 @@ SearchArtifacts graphSearch(const RoutingRequest& request,
             ? request.options.minimumTimeStep
             : step;
     bool movementGenerated = false;
+
+    std::shared_ptr<OptimalAngles> angles{nullptr};
+    double twd{NAN};
+
+    if (request.options.optimalAngles) {
+    const auto resolved = internal::resolveEnvironment(
+        request, environment, from.position, from.time);
+    double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+    twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+    angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+        ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+    }
+
     for (double heading :
          headings(request.options.graphHeadingStepDegrees, bearing, true,
                   request.options.graphHeadingStepDegrees / 2.0,
-                  request.options.maximumSearchAngleDegrees)) {
+                  request.options.maximumSearchAngleDegrees,
+                  angles, twd)) {
       if (graphLabelsThisSearch >= graphLabelBudget) {
         result.failure = RoutingStatus::ResourceLimitReached;
         result.reason = "maximum graph labels reached";
