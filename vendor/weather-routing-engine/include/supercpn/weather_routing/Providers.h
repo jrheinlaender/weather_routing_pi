@@ -266,7 +266,7 @@ private:
   std::string identity_;
 };
 
-class PolarPerformanceModel final : public VesselPerformanceModel {
+class PolarPerformanceModel : public VesselPerformanceModel {
 public:
   explicit PolarPerformanceModel(VesselConfiguration configuration);
   bool valid(std::string* reason = nullptr) const override;

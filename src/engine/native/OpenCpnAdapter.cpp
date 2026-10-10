@@ -32,6 +32,8 @@
 #include "WeatherDataProvider.h"
 #include "supercpn/weather_routing/ArrivalPlanner.h"
 #include "supercpn/weather_routing/Engine.h"
+#include "supercpn/weather_routing/Types.h"
+#include "supercpn/weather_routing/Providers.h"
 #include "supercpn/weather_routing/QuickEngine.h"
 #include "supercpn/weather_routing/AlternativeEngine.h"
 #include "original_routing/Engine.h"
@@ -439,10 +441,36 @@ private:
   mutable std::vector<LocalCacheSlot> localCache_{32768U};
 };
 
-class OpenCpnPerformanceModel final : public wr::VesselPerformanceModel {
+namespace {
+  std::size_t find_polar_index(const std::string& identity,
+                               const std::vector<Polar>& polars) {
+    if (identity.rfind("polar:", 0) == 0) {
+      std::size_t index = 0;
+      const auto end = identity.find(':', 6);
+
+      try {
+        index = static_cast<std::size_t>(std::stoul(identity.substr(
+            6, end == std::string::npos ? std::string::npos : end - 6)));
+      } catch (...) {
+        return 0;
+      }
+
+      return index;
+    }
+
+    for (std::size_t index = 0; index < polars.size(); ++index)
+      if (polars[index].FileName.ToStdString() == identity)
+        return index;
+
+    return 0;
+  }
+}
+
+class OpenCpnPerformanceModel final : public wr::PolarPerformanceModel {
 public:
-  explicit OpenCpnPerformanceModel(RouteMapConfiguration configuration)
-      : configuration_(std::move(configuration)) {}
+  explicit OpenCpnPerformanceModel(RouteMapConfiguration rm_config,
+                                   wr::VesselConfiguration v_config)
+      : PolarPerformanceModel(v_config), configuration_(std::move(rm_config)) {}
 
   bool valid(std::string* reason) const override {
     const bool result =
@@ -506,23 +534,28 @@ public:
       motor.speedThroughWaterKnots = configuration_.MotorSpeed;
       return motor;
     }
-    std::size_t index = 0;
-    if (identity.rfind("polar:", 0) == 0) {
-      const auto end = identity.find(':', 6);
-      try {
-        index = static_cast<std::size_t>(std::stoul(identity.substr(
-            6, end == std::string::npos ? std::string::npos : end - 6)));
-      } catch (...) {
-        return {};
-      }
-    } else {
-      for (; index < configuration_.boat.Polars.size(); ++index)
-        if (configuration_.boat.Polars[index].FileName.ToStdString() ==
-            identity)
-          break;
-    }
+
+    std::size_t index = find_polar_index(identity, configuration_.boat.Polars);
+
     return evaluatePolar(index, position, time, tws, twa);
   }
+
+  virtual std::shared_ptr<wr::OptimalAngles> GetOptimalAngles(
+      wr::PropulsionMode mode, wr::ProfileRole role,
+      const std::string& identity, double tws,
+      const wr::WaveSample& waves) const override {
+    if (mode != wr::PropulsionMode::Sail || role != wr::ProfileRole::SailOnly)
+      return {};
+
+    if (configuration_.boat.Polars.empty()) return {};
+
+    std::size_t index = find_polar_index(identity, configuration_.boat.Polars);
+    if (index >= configuration_.boat.Polars.size()) return {};
+    auto result = PolarPerformanceModel::GetOptimalAngles(mode, role, identity,
+                                                          tws, waves);
+
+    return result;
+  };
 
 private:
   wr::PerformanceCandidate evaluatePolar(std::size_t index,
@@ -817,11 +850,17 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
     for (double tws : p.GetWindSpeeds()) {
       std::vector<float> speeds = p.GetSpeeds(tws);
       wr::PolarRow row;
-      row.trueWindSpeedKnots = tws;
+      row.SetTws(tws);
       size_t speed = 0;
 
       for (const double twa : p.GetDegreeSteps())
-        row.points.emplace_back(wr::PolarPoint{twa, speeds[speed++]});
+        row.AddPoint(wr::PolarPoint{twa, speeds[speed++]});
+#if 0
+          // Add rows to test asymmetric polar
+          speed = speeds.size() - 1;
+          for (auto it_twa = p.GetDegreeSteps().rbegin() + 1; it_twa != p.GetDegreeSteps().rend() - 1; ++it_twa)
+            row.AddPoint(wr::PolarPoint{360.0 - *it_twa, speeds[speed--]});
+#endif
 
       profile.rows.emplace_back(std::move(row));
     }
@@ -883,6 +922,7 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
   request.options.maximumSearchAngleDegrees = configuration.IsQuick()
       ? configuration.EngineSettings.quick.maximumSearchAngle : configuration.MaxSearchAngle;
   request.options.destinationToleranceNm = 0.35;
+  request.options.optimalAngles = configuration.UseOptimalAngles;
   const double nominalDistance =
       std::max(0.5, configuration.MotorSpeed > 0.0
                         ? configuration.MotorSpeed * baseStep / 10800.0
