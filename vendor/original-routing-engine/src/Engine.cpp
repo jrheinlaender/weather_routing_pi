@@ -147,6 +147,13 @@ public:
     arena.checkpoint();
     return source->evaluateAt(p, t, m, r, id, w, a, s);
   }
+
+  // Stub, not used in this engine
+  virtual std::shared_ptr<wr::OptimalAngles> GetOptimalAngles(
+      wr::PropulsionMode, wr::ProfileRole, const std::string&, double,
+      const wr::WaveSample&) const override {
+    return std::make_shared<wr::OptimalAngles>();
+  }
 };
 class GuardClimatology final : public wr::ClimatologyProvider {
   std::shared_ptr<const wr::ClimatologyProvider> source;

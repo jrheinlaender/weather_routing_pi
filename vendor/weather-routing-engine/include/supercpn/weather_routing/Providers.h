@@ -173,6 +173,15 @@ public:
     return evaluate(mode, role, profileIdentity, trueWindSpeedKnots,
                     trueWindAngleDegrees, waves);
   }
+  /**
+   * Return optimal sailing angles for the given profile and wind speed
+   *
+   * Note that currently wave samples are not supported
+   * Note that this method is only implemented for PolarPerformanceModel
+   */
+  virtual std::shared_ptr<OptimalAngles> GetOptimalAngles(
+    PropulsionMode mode, ProfileRole role, const std::string& identity,
+    double tws, const WaveSample& waves) const = 0;
 };
 
 struct RoutingEnvironment {
@@ -273,6 +282,14 @@ public:
   [[nodiscard]] const VesselConfiguration& configuration() const {
     return configuration_;
   }
+  /**
+   * Return optimal sailing angles for the given profile and wind speed
+   *
+   * Note that currently wave samples are not supported
+   */
+  virtual std::shared_ptr<OptimalAngles> GetOptimalAngles(
+    PropulsionMode mode, ProfileRole role, const std::string& identity,
+    double tws, const WaveSample& waves) const override;
   static bool validateProfile(const PerformanceProfile& profile,
                               std::string* reason = nullptr);
   static double interpolate(const PerformanceProfile& profile,

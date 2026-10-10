@@ -1,4 +1,5 @@
 #include "supercpn/weather_routing/Providers.h"
+#include "supercpn/weather_routing/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -202,6 +203,170 @@ PerformanceCandidate PolarPerformanceModel::evaluate(
       configuration_.propulsion.fuelConsumptionLitresPerHour)
     result.fuelLitresPerHour =
         *configuration_.propulsion.fuelConsumptionLitresPerHour;
+  return result;
+}
+
+namespace {
+double deg2rad(const double angle) {
+  return angle / 180.0 * std::numbers::pi;
+}
+
+double rad2deg(const double angle) {
+  return angle / std::numbers::pi * 180.0;
+}
+using OptimalAngles::Angle::STARBOARD_UPWIND;
+using OptimalAngles::Angle::STARBOARD_DOWNWIND;
+using OptimalAngles::Angle::PORT_DOWNWIND;
+using OptimalAngles::Angle::PORT_UPWIND;
+
+double iterSolveOptimalAngle(const PolarPoint& low, const PolarPoint& high,
+                             const double twa_start) {
+  double d_twa = deg2rad(high.trueWindAngleDegrees - low.trueWindAngleDegrees);
+  double d_bs = high.boatSpeedKnots - low.boatSpeedKnots;
+  double twa_low = deg2rad(low.trueWindAngleDegrees);
+  double twa_next = twa_start;
+  double twa;
+  unsigned it = 0;
+  do {
+    twa = twa_next;
+    /**
+     * The range of atan() is -90 to 90 degrees, therefore true wind angles
+     * must be corrected. Note that using atan2() does not help. Since d_bs can
+     * be positive or negative, while the denominator is always positive, the
+     * result of atan2() will always be in the first or second quadrant.
+     */
+    twa_next = atan(d_bs / ((twa - twa_low) * d_bs + d_twa * low.boatSpeedKnots));
+    if (twa > std::numbers::pi / 2)
+      twa_next += std::numbers::pi;
+    if (twa > 3 * std::numbers::pi / 2)
+      twa_next += std::numbers::pi;
+  } while (std::fabs(twa_next - twa) > 1E-5 && ++it < 20);
+
+  return twa_next;
+}
+}
+
+const std::shared_ptr<OptimalAngles> PolarRow::GetOptimalAngles() const {
+  if (m_optimal_angles->valid())
+    return m_optimal_angles;
+  if (m_points.empty())
+    return nullptr;
+
+  std::array<std::pair<std::vector<PolarPoint>::const_iterator, double>, 4> p_max =
+    {std::pair{m_points.end(), 0.0}, std::pair{m_points.end(), 0.0},
+     std::pair{m_points.end(), 0.0}, std::pair{m_points.end(), 0.0}};
+
+  for (auto p = m_points.begin(); p != m_points.end(); ++p) {
+    double twa = p->trueWindAngleDegrees;
+    // Ensure that 180° is in section 1, to handle symmetric polars
+    auto sector = OptimalAngles::Angle((twa - 1E-6) / 90);
+    double upwind = (sector == STARBOARD_UPWIND ||
+                     sector == PORT_UPWIND) ? 1 : -1;
+
+    double vmg = upwind * cos(deg2rad(twa)) * p->boatSpeedKnots;
+    if (vmg > p_max[size_t(sector)].second)
+      p_max[size_t(sector)] = {p, vmg};
+  }
+
+  // interpolate the best vmg (as it often lies between entries in the polar)
+  for (auto a : OptimalAngles::All) {
+    if (m_points.back().trueWindAngleDegrees <= 180.0 && a > STARBOARD_DOWNWIND)
+      break; // Symmetric polar
+
+    const auto& p_mid = p_max[size_t(a)].first;
+    if (p_mid == m_points.end())
+      continue;
+
+    double upwind = (a == STARBOARD_UPWIND || a == PORT_UPWIND) ? 1.0 : -1.0;
+    double twa_l = deg2rad(p_mid->trueWindAngleDegrees);
+    double twa_r = twa_l;
+    auto p_l = (p_mid == m_points.begin()) ? p_mid : p_mid - 1;
+    auto p_r = (p_mid == m_points.end() - 1) ? p_mid : p_mid + 1;
+    double twa = twa_l;
+
+    /**
+     * Check gradient to decide whether extremum is left or right of max_twa
+     * Note that it is possible to have an extremum on either side
+     * The SailingVMG method does not cover this case
+     */
+    double d_bs_l  = p_mid->boatSpeedKnots - p_l->boatSpeedKnots;
+    double d_bs_r  = p_r->boatSpeedKnots - p_mid->boatSpeedKnots;
+    double d_twa_l = deg2rad(p_mid->trueWindAngleDegrees - p_l->trueWindAngleDegrees);
+    double d_twa_r = deg2rad(p_r->trueWindAngleDegrees - p_mid->trueWindAngleDegrees);
+    double vmg_l   = 0.0;
+    double vmg_r   = 0.0;
+
+    if (d_twa_l > 1E-6) {
+      double grad_l = d_bs_l / d_twa_l * cos(twa) -
+                      sin(twa) * p_mid->boatSpeedKnots;
+      if (grad_l * upwind < 0.0)
+        twa_l = iterSolveOptimalAngle(*p_l, *p_mid, twa - 0.25 * d_twa_l);
+      vmg_l = upwind * cos(twa_l) * (p_mid->boatSpeedKnots - (twa - twa_l) / d_twa_l * d_bs_l);
+    }
+    if (d_twa_r > 1E-6) {
+      double grad_r = d_bs_r / d_twa_r * cos(twa) -
+                      sin(twa) * p_mid->boatSpeedKnots;
+      if (grad_r * upwind > 0.0)
+        twa_r = iterSolveOptimalAngle(*p_mid, *p_r, twa + 0.25 * d_twa_r);
+      vmg_r = upwind * cos(twa_r) * (p_mid->boatSpeedKnots + (twa_r - twa) / d_twa_r * d_bs_r);
+    }
+
+    m_optimal_angles->at(a) = rad2deg(vmg_l > vmg_r ? twa_l : twa_r);
+  }
+
+  // For symmetric polars. And it assumes the points are sorted ascending
+  if (m_points.back().trueWindAngleDegrees <= 180.0) {
+    m_optimal_angles->at(PORT_UPWIND) =
+      360.0 - m_optimal_angles->at(STARBOARD_UPWIND);
+    m_optimal_angles->at(PORT_DOWNWIND) =
+      360.0 - m_optimal_angles->at(STARBOARD_DOWNWIND);
+  }
+
+  return m_optimal_angles;
+}
+
+std::shared_ptr<OptimalAngles> PolarPerformanceModel::GetOptimalAngles(
+    PropulsionMode mode, ProfileRole role, const std::string& identity,
+    double tws, const WaveSample&) const {
+  if (mode != PropulsionMode::Sail || role != ProfileRole::SailOnly)
+      return {};
+
+  const PerformanceProfile* prof = profile(role, identity);
+  if (prof == nullptr)
+      return {};
+  if (prof->rows.empty())
+    return {};
+
+  // Search polar rows between which the wind speed lies
+  const auto after = std::lower_bound(
+      prof->rows.begin(), prof->rows.end(), tws,
+      [](const PolarRow& row, double value) {
+          return row.GetTws() < value;
+      });
+
+  if (after == prof->rows.begin())
+    return after->GetOptimalAngles();
+  if (after == prof->rows.end())
+    return prof->rows.back().GetOptimalAngles();
+  const auto before = after - 1;
+  // No optimal angles can be found at zero wind speed
+  if (before->GetTws() < 1E-9)
+    return after->GetOptimalAngles();
+
+  const auto opt_before = before->GetOptimalAngles();
+  const auto opt_after = after->GetOptimalAngles();
+
+  if (!opt_before->valid() || !opt_after->valid())
+      return {};
+
+  // Linear interpolation, could be improved by using 1st derivatives
+  std::shared_ptr<OptimalAngles> result = std::make_shared<OptimalAngles>();
+  double tws_ratio = (tws - before->GetTws()) /
+                     (after->GetTws() - before->GetTws());
+
+  for (const auto a : OptimalAngles::All)
+      result->at(a) = std::lerp(opt_before->at(a), opt_after->at(a), tws_ratio);
+
   return result;
 }
 

@@ -116,6 +116,45 @@ enum class PropulsionMode { Sail, MotorSail, Motor };
 enum class ProfileRole { SailOnly, MotorSailing, MotorOnly };
 enum class Tack { Unknown, Port, Starboard };
 
+/**
+ * Stores optimal sailing angles for best Velocity Made Good (VMG) in different
+ * sailing directions. VMG represents the component of the boat's velocity in
+ * the upwind or downwind direction.
+ */
+class OptimalAngles {
+public:
+  enum class Angle : size_t {
+    STARBOARD_UPWIND,    //!< Sailing upwind on starboard tack (0-90 degrees)
+    STARBOARD_DOWNWIND,  //!< Sailing downwind on starboard tack (90-180 degrees)
+    PORT_DOWNWIND,       //!< Sailing downwind on port tack (180-270 degrees)
+    PORT_UPWIND          //!< Sailing upwind on port tack (270-360 degrees)
+  };
+  // This helps to iterate over the enumeration
+  static constexpr Angle All[4] = {
+      Angle::STARBOARD_UPWIND, Angle::STARBOARD_DOWNWIND,
+      Angle::PORT_DOWNWIND, Angle::PORT_UPWIND
+  };
+
+  OptimalAngles() { values = {0.0, 0.0, 0.0, 0.0}; }
+  OptimalAngles(std::array<float,4> val) : values(std::move(val)) {}
+  bool valid() const {
+      return values != std::array<float,4>{0.0, 0.0, 0.0, 0.0};
+  }
+  const float& at(const Angle angle) const {
+      return values[(int)angle];
+  }
+  float& at(const Angle angle) {
+      return values[(int)angle];
+  }
+private:
+  /**
+   * Optimal sailing angles (in degrees) for maximum VMG in each sailing
+   * direction. These values represent the wind angles that produce the best
+   * progress toward or away from the wind direction.
+   */
+  std::array<float,4> values;
+};
+
 struct PolarPoint {
   double trueWindAngleDegrees{};
   double boatSpeedKnots{};
@@ -129,10 +168,14 @@ public:
   void SetTws(double tws) { m_tws_knots = std::move(tws); }
   void AddPoint(PolarPoint p) { m_points.emplace_back(std::move(p)); }
   const std::vector<PolarPoint>& GetPoints() const { return m_points; }
+  /// Get optimal VMG angles (calculating on-the-fly if not existing yet)
+  const std::shared_ptr<OptimalAngles> GetOptimalAngles() const;
 
 private:
   double m_tws_knots{};
   std::vector<PolarPoint> m_points;
+  // Is a pointer because GetOptimalAngles() must be const, see Engine.cpp
+  std::shared_ptr<OptimalAngles> m_optimal_angles{};
 };
 
 struct WavePerformancePoint {
