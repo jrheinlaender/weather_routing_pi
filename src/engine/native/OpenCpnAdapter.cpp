@@ -1073,13 +1073,13 @@ bool RunModernNativeRoute(RouteMapOverlay& overlay, wxString& error) {
   auto weather =
       std::make_shared<OpenCpnWeatherProvider>(overlay, configuration);
   auto land = std::make_shared<OpenCpnLandProvider>(overlay, configuration);
-  auto performance = std::make_shared<OpenCpnPerformanceModel>(configuration);
+  const wr::RoutingRequest request = BuildRequest(overlay, configuration);
+  auto performance = std::make_shared<OpenCpnPerformanceModel>(configuration, request.vessel);
   wr::RoutingEnvironment environment;
   environment.grib = weather;
   environment.landAndBoundaries = land;
   environment.performance = performance;
   environment.memberIdentity = "OpenCPN native deterministic";
-  const wr::RoutingRequest request = BuildRequest(overlay, configuration);
   wr::RoutingEngine engine;
   wr::RoutingResult result;
   std::uint64_t quickGenerated = 0;
@@ -1111,7 +1111,7 @@ bool RunModernNativeRoute(RouteMapOverlay& overlay, wxString& error) {
       auto quickLand = std::make_shared<OpenCpnLandProvider>(
           overlay, quickConfiguration);
       auto quickPerformance = std::make_shared<OpenCpnPerformanceModel>(
-          quickConfiguration);
+          quickConfiguration, request.vessel);
       wr::RoutingEnvironment quickEnvironment;
       quickEnvironment.grib = quickWeather;
       quickEnvironment.landAndBoundaries = quickLand;
@@ -1277,7 +1277,7 @@ bool RunModernNativeRoute(RouteMapOverlay& overlay, wxString& error) {
         auto candidateLand = std::make_shared<OpenCpnLandProvider>(
             overlay, candidateConfiguration);
         auto candidatePerformance =
-            std::make_shared<OpenCpnPerformanceModel>(candidateConfiguration);
+            std::make_shared<OpenCpnPerformanceModel>(candidateConfiguration, request.vessel);
         wr::RoutingEnvironment candidateEnvironment;
         candidateEnvironment.grib = candidateWeather;
         candidateEnvironment.landAndBoundaries = candidateLand;
@@ -1445,7 +1445,7 @@ bool RunModernNativeRoute(RouteMapOverlay& overlay, wxString& error) {
           auto candidateLand =
               std::make_shared<OpenCpnLandProvider>(overlay, configuration);
           auto candidatePerformance =
-              std::make_shared<OpenCpnPerformanceModel>(configuration);
+              std::make_shared<OpenCpnPerformanceModel>(configuration, request.vessel);
           wr::RoutingEnvironment candidateEnvironment;
           candidateEnvironment.grib = candidateWeather;
           candidateEnvironment.landAndBoundaries = candidateLand;
@@ -1494,7 +1494,7 @@ bool RunModernNativeRoute(RouteMapOverlay& overlay, wxString& error) {
         wr::RoutingEnvironment comfortEnvironment;
         comfortEnvironment.grib = provider;
         comfortEnvironment.landAndBoundaries = std::make_shared<OpenCpnLandProvider>(overlay, comfortConfiguration);
-        comfortEnvironment.performance = std::make_shared<OpenCpnPerformanceModel>(comfortConfiguration);
+        comfortEnvironment.performance = std::make_shared<OpenCpnPerformanceModel>(comfortConfiguration, request.vessel);
         auto comfortRequest = BuildRequest(overlay, comfortConfiguration);
         const auto extra = std::min(result.metrics.elapsed / 2, wr::Duration{12 * 3600});
         comfortRequest.limits.maximumRouteDuration = std::min(
