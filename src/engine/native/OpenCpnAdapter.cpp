@@ -915,7 +915,7 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
           static_cast<std::int64_t>(std::llround(configuration.DeltaTime)));
   const std::int64_t baseStep = quality.time_step_seconds;
   request.options.timeStep = wr::Duration{quality.time_step_seconds};
-  request.options.minimumTimeStep = wr::Duration{10 * 60};
+  request.options.minimumTimeStep = wr::Duration{1 * 60};  // Minimum time step
   request.options.headingStepDegrees = quality.heading_step_degrees;
   request.options.refinedHeadingStepDegrees =
       quality.refined_heading_step_degrees;
@@ -929,9 +929,9 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
                         : baseStep / 1800.0);
   request.options.spatialCellNm = std::clamp(nominalDistance, 1.0, 5.0);
   request.options.labelsPerCell = quality.labels_per_cell;
-  request.options.adaptiveTimeStep = true;
-  request.options.adaptiveHeadings = true;
-  request.options.adaptiveFrontierDensity = true;
+  request.options.adaptiveTimeStep = false;         // true;
+  request.options.adaptiveHeadings = false;         // true;
+  request.options.adaptiveFrontierDensity = false;  // true;
   request.options.useReverseRecovery =
       configuration.UseReverseReachabilityRecovery ||
       configuration.TimeMode ==
@@ -967,7 +967,7 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
 
   const weather_routing::RoutingResourcePolicy resources =
       weather_routing::SelectRoutingResourcePolicy(
-          routeDistance, configuration.IsFastEngine() ? 100 : configuration.RoutingEffortPercent,
+          routeDistance, configuration.IsFastEngine() ? 100 : configuration.RoutingEffortPercent * 3,
           configuration.chart_safety_scout_preview);
   request.limits.maximumGeneratedStates = resources.maximum_generated_states;
   request.limits.maximumCoastalEndpointGeneratedStates =

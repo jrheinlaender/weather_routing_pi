@@ -70,16 +70,16 @@ inline RoutingResourcePolicy selectRoutingResourcePolicy(
       scaleRoutingResource(225000, distanceScale, effortPercent);
   const std::uint64_t graph =
       scaleRoutingResource(225000, distanceScale, effortPercent);
-  return {endpoint + forward + frontier + graph,
-          endpoint,
-          forward,
-          scaleRoutingResource(512, distanceScale, effortPercent),
-          scaleRoutingResource(40960, distanceScale, effortPercent),
-          frontier,
-          scaleRoutingResource(90000, distanceScale, effortPercent),
-          graph,
-          scaleRoutingResource(70000, distanceScale, effortPercent),
-          scaleRoutingResource(180000, distanceScale, effortPercent)};
+  return {endpoint + forward + frontier + graph, // maximumGeneratedStates
+          endpoint, // maximumCoastalEndpointGeneratedStates
+          forward,  // maximumForwardGeneratedStates
+          scaleRoutingResource(512, distanceScale, effortPercent),   // maximumReverseCandidates
+          scaleRoutingResource(40960, distanceScale, effortPercent), // maximumReverseBridgeAttempts
+          frontier, // maximumFrontierRecoveryGeneratedStates
+          scaleRoutingResource(90000, distanceScale, effortPercent), // maximumFrontierRecoveryLabels
+          graph, // maximumGraphGeneratedStates
+          scaleRoutingResource(70000, distanceScale, effortPercent), // maximumRetainedStates
+          scaleRoutingResource(180000, distanceScale, effortPercent)}; // maximumGraphLabels
 }
 
 }  // namespace supercpn::weather_routing
