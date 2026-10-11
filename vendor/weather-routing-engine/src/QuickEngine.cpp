@@ -2,6 +2,7 @@
 #include "supercpn/weather_routing/QuickEngine.h"
 #include "MotionKernel.h"
 #include "supercpn/weather_routing/Comfort.h"
+#include "RoutingInternal.h"
 
 #include <algorithm>
 #include <array>
@@ -309,6 +310,21 @@ std::vector<RouteLeg> reconstruct(const RoutingRequest& request,
   for (auto p : path) {
     const Label& n = pool.labels[p];
     const auto from = pool.unpack(pool.labels[n.parent]);
+
+    // Resolve environment
+    const auto resolved = internal::resolveEnvironment(
+        request, environment, from.position, from.time);
+
+    std::shared_ptr<OptimalAngles> optimal_angles{nullptr};
+    double twd{NAN};
+
+    if (request.options.optimalAngles) {
+      double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+      twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+      optimal_angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+          ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+    }
+
     std::vector<internal::MotionCandidate> choices;
     RoutingStatus failure = RoutingStatus::Complete;
     if (n.flags & 2) {
@@ -317,7 +333,7 @@ std::vector<RouteLeg> reconstruct(const RoutingRequest& request,
       if (waiting) choices.push_back(std::move(*waiting));
     } else {
       choices = internal::checkedMotion(
-          request, environment, performance, from, n.heading,
+          request, environment, resolved, performance, from, n.heading,
           Duration{n.duration}, Duration{n.slice}, diagnostics, &failure);
     }
     auto chosen =
@@ -639,6 +655,21 @@ QuickRoutingResult QuickRoutingEngine::route(
           addAngle(parent.heading);
           for (double off : {-10., -5., 5., 10.}) addAngle(bearing + off);
           bool movement = false;
+
+          // Resolve environment here, since it is identical for all angles
+          const auto resolved = internal::resolveEnvironment(
+              request, environment, from.position, from.time);
+
+          std::shared_ptr<OptimalAngles> optimal_angles{nullptr};
+          double twd{NAN};
+
+          if (request.options.optimalAngles) {
+            double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+            twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+            optimal_angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+                ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+          }
+
           for (std::size_t a = 0;
                a < count && result.diagnostics.generatedStates < stageLimit;
                ++a) {
@@ -650,7 +681,7 @@ QuickRoutingResult QuickRoutingEngine::route(
             const Duration slice =
                 (parent.flags & 1) ? Duration{300} : Duration{900};
             auto motions = internal::checkedMotion(
-                request, environment, performance, from, angles[a], step, slice,
+                request, environment, resolved, performance, from, angles[a], step, slice,
                 result.diagnostics, &dataFailure);
             for (const auto& motion : motions) {
               if (result.diagnostics.generatedStates >= stageLimit) break;

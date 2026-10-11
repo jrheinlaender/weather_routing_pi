@@ -782,14 +782,12 @@ Duration directConnectionWindow(const RoutingRequest& request, const Node& from,
 
 std::vector<Node> propagate(const RoutingRequest& request,
                             const RoutingEnvironment& environment,
+                            const ResolvedEnvironment& resolved,
                             const VesselPerformanceModel& performanceModel,
                             const Node& from, double heading, Duration step,
                             RoutingDiagnostics& diagnostics,
                             Duration maximumIntegrationSlice,
                             RoutingStatus* dataFailure) {
-  const auto resolved = internal::resolveEnvironment(request, environment,
-                                                     from.position, from.time);
-  ++diagnostics.weatherSamples;
   if (resolved.failureStatus != RoutingStatus::Complete) {
     if (dataFailure) *dataFailure = resolved.failureStatus;
     return {};
@@ -1439,12 +1437,15 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
       const double bearing =
           initialBearingDegrees(from.position, request.destination);
 
+      // Resolve environment here, since it is identical for all headings
+      const auto resolved = internal::resolveEnvironment(request, environment,
+                                                     from.position, from.time);
+      ++diagnostics.weatherSamples;
+
       std::shared_ptr<OptimalAngles> angles{nullptr};
       double twd{NAN};
 
       if (request.options.optimalAngles) {
-        const auto resolved = internal::resolveEnvironment(
-            request, environment, from.position, from.time);
         double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
         twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
         angles = performance.GetOptimalAngles(PropulsionMode::Sail,
@@ -1467,8 +1468,8 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
             coastalDepartureEgress || refineIntegration
                 ? std::chrono::minutes{5}
                 : std::chrono::minutes{15}};
-        for (auto& next : propagate(request, environment, performance, from,
-                                    heading, layerStep, diagnostics,
+        for (auto& next : propagate(request, environment, resolved, performance,
+                                    from, heading, layerStep, diagnostics,
                                     integrationSlice, &dataFailure)) {
           const std::uint64_t ordinaryForwardGenerated =
               diagnostics.generatedStates -
@@ -1506,6 +1507,7 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
         }
       }
       if (candidates.size() == candidatesBefore) {
+        // Note: This resolves the environment for some midpoint
         if (auto waiting = waitInPlace(request, environment, from, layerStep,
                                        diagnostics)) {
           const std::uint64_t ordinaryForwardGenerated =
@@ -1614,16 +1616,19 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
         const double bearing =
             initialBearingDegrees(from.position, request.destination);
 
+        // Resolve environment here, since it is identical for all headings
+        const auto resolved = internal::resolveEnvironment(
+          request, environment, from.position, from.time);
+        ++diagnostics.weatherSamples;
+
         std::shared_ptr<OptimalAngles> angles{nullptr};
         double twd{NAN};
 
         if (request.options.optimalAngles) {
-            const auto resolved = internal::resolveEnvironment(
-                request, environment, from.position, from.time);
-            double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
-            twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
-            angles = performance.GetOptimalAngles(PropulsionMode::Sail,
-                ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+          double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+          twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+          angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+              ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
         }
 
         for (double heading : headings(
@@ -1637,7 +1642,7 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
                               RoutingProgressStage::ForwardIsochrone,
                               diagnostics, attempt, totalAttempts);
           for (auto& next : propagate(
-                   request, environment, performance, from, heading,
+                   request, environment, resolved, performance, from, heading,
                    request.options.minimumTimeStep, diagnostics,
                    Duration{std::chrono::minutes{5}}, &dataFailure)) {
             const std::uint64_t ordinaryForwardGenerated =
@@ -2579,16 +2584,19 @@ SearchArtifacts graphSearch(const RoutingRequest& request,
             : step;
     bool movementGenerated = false;
 
+    // Resolve environment here, since it is identical for all headings
+    const auto resolved = internal::resolveEnvironment(
+      request, environment, from.position, from.time);
+    ++diagnostics.weatherSamples;
+
     std::shared_ptr<OptimalAngles> angles{nullptr};
     double twd{NAN};
 
     if (request.options.optimalAngles) {
-    const auto resolved = internal::resolveEnvironment(
-        request, environment, from.position, from.time);
-    double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
-    twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
-    angles = performance.GetOptimalAngles(PropulsionMode::Sail,
-        ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+      double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+      twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+      angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+          ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
     }
 
     for (double heading :
@@ -2605,8 +2613,8 @@ SearchArtifacts graphSearch(const RoutingRequest& request,
       }
       workerProgress.tick(request, progressStage, diagnostics);
       auto propagated = propagate(
-          request, environment, performance, from, heading, expansionStep,
-          diagnostics, Duration{std::chrono::minutes{15}}, &dataFailure);
+          request, environment, resolved, performance, from, heading,
+          expansionStep, diagnostics, Duration{std::chrono::minutes{15}}, &dataFailure);
       for (auto& next : propagated) {
         if (diagnostics.generatedStates >= graphGeneratedStateLimit) {
           result.failure = RoutingStatus::ResourceLimitReached;
@@ -2778,7 +2786,7 @@ std::vector<MotionCandidate> checkedMotion(
     const VesselPerformanceModel& performance, const MotionState& from,
     double heading, Duration step, Duration slice, RoutingDiagnostics& diagnostics,
     RoutingStatus* failure) {
-  auto nodes = propagate(request, environment, performance,
+  auto nodes = propagate(request, environment, resolved, performance,
                          copyMotionState<Node>(from), heading, step, diagnostics,
                          slice, failure);
   std::vector<MotionCandidate> result;

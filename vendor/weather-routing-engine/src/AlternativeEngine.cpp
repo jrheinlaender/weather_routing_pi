@@ -213,6 +213,21 @@ AlternativeRoutingResult AlternativeRoutingEngine::route(
           request.departure + request.limits.maximumRouteDuration)
         continue;
       withinDuration = true;
+
+      // Resolve environment here, since it is identical for all headings
+      const auto resolved = internal::resolveEnvironment(
+          request, environment, parent->state.position, parent->state.time);
+
+      std::shared_ptr<OptimalAngles> optimal_angles{nullptr};
+      double twd{NAN};
+
+      if (request.options.optimalAngles) {
+      double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
+      twd = vectorDirectionToDegrees(resolved.snapshot.wind.velocity);
+      optimal_angles = performance.GetOptimalAngles(PropulsionMode::Sail,
+          ProfileRole::SailOnly, "polar:0", tws, WaveSample{});
+      }
+
       const double bearing = initialBearingDegrees(parent->state.position,
                                                     request.destination);
       const unsigned headings = static_cast<unsigned>(
@@ -229,7 +244,7 @@ AlternativeRoutingResult AlternativeRoutingEngine::route(
           continue;
         ++output.alternative.attemptedMotions;
         auto motions = internal::checkedMotion(
-            request, environment, performance, parent->state, heading,
+            request, environment, resolved, performance, parent->state, heading,
             options.timeStep, std::min(options.timeStep, Duration{300}),
             result.diagnostics,
             &dataFailure);

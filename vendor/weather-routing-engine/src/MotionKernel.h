@@ -2,6 +2,7 @@
 #pragma once
 
 // Shared physical operations. Search policy remains in each engine.
+#include "RoutingInternal.h"
 #include "supercpn/weather_routing/Engine.h"
 
 namespace supercpn::weather_routing::internal {
@@ -25,6 +26,7 @@ struct MotionCandidate {
 };
 std::vector<MotionCandidate> checkedMotion(const RoutingRequest&,
                                            const RoutingEnvironment&,
+                                           const ResolvedEnvironment&,
                                            const VesselPerformanceModel&,
                                            const MotionState&, double heading,
                                            Duration step, Duration slice,
