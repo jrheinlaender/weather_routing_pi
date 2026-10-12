@@ -230,7 +230,11 @@ public:
 public:
   /** Copy constructor performs a deep copy of the GribRecord. */
   GribRecord(const GribRecord& rec);
-  GribRecord() { m_bfilled = false; }
+  GribRecord(GribRecord &&other) noexcept;
+  GribRecord();
+  GribRecord& operator=(const GribRecord &rec);
+  GribRecord& operator=(GribRecord &&other) noexcept;
+  void swap(GribRecord &other) noexcept;
 
   virtual ~GribRecord();
 
@@ -248,6 +252,11 @@ public:
    * - Angular interpolation for directional values (when dir=true)
    *   to properly handle the 0°/360° wrapping
    * This corresponds to InterpolationMethod::SCALAR
+   *
+   * If the grid points of rec1 and rec2 do not align, spatial interpolation
+   * is always SCALAR and no smoothing is applied. This is because it can be
+   * assumed that the interpolated records will again be queried and at that
+   * time another interpolation and smoothing takes place
    *
    * @param rec1 GribRecord at earlier time t1
    * @param rec2 GribRecord at later time t2
@@ -302,7 +311,7 @@ public:
   static GribRecord* Interpolated2DRecord(
       GribRecord*& rety, const GribRecord& rec1x, const GribRecord& rec1y,
       const GribRecord& rec2x, const GribRecord& rec2y, double d,
-      const SmoothingMethod sm);  // Default was NO_SMOOTHING);
+      const SmoothingMethod sm);  // Default was NO_SMOOTHING
 
   static GribRecord* MagnitudeRecord(const GribRecord& rec1,
                                      const GribRecord& rec2);
@@ -683,9 +692,11 @@ protected:
       const GribRecord &rec1, const GribRecord &rec2, double &La1,
       double &Lo1, double &La2, double &Lo2, double &Di, double &Dj, int &Ni,
       int &Nj);
+  // Interpolation is always SCALAR and no smoothing takes place
   static GribRecord *SpatiallyInterpolatedRecord(const GribRecord &rec1,
                                                   const GribRecord &rec2,
                                                   double d, bool dir);
+  // Interpolation is always VECTOR and no smoothing takes place
   static GribRecord *SpatiallyInterpolated2DRecord(
       GribRecord *&rety, const GribRecord &rec1x, const GribRecord &rec1y,
       const GribRecord &rec2x, const GribRecord &rec2y, double d);

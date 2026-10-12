@@ -216,7 +216,8 @@ bool WeatherDataProvider::GetGribWind(RouteMapConfiguration& configuration,
   else if (!GribRecord::getInterpolatedValues(
                twsOverGround, twdOverGround,
                grib->m_GribRecordPtrArray[Idx_WIND_VX],
-               grib->m_GribRecordPtrArray[Idx_WIND_VY], lon, lat))
+               grib->m_GribRecordPtrArray[Idx_WIND_VY], lon, lat,
+               GribRecord::SCALAR,GribRecord::NO_SMOOTHING))
     return false;
 
   twsOverGround *= 3.6 / 1.852;  // knots
@@ -247,7 +248,8 @@ static bool GribCurrent(RouteMapConfiguration& configuration, double lat,
   else if (!GribRecord::getInterpolatedValues(
                currentSpeed, currentDir,
                grib->m_GribRecordPtrArray[Idx_SEACURRENT_VX],
-               grib->m_GribRecordPtrArray[Idx_SEACURRENT_VY], lon, lat))
+               grib->m_GribRecordPtrArray[Idx_SEACURRENT_VY], lon, lat,
+               GribRecord::SCALAR, GribRecord::NO_SMOOTHING))
     return false;
 
   currentSpeed *= 3.6 / 1.852;  // knots
@@ -562,7 +564,11 @@ double WeatherDataProvider::GetWeatherParameter(
   GribRecord* grh = grib->m_GribRecordPtrArray[gribIndex];
   if (!grh) return returnOnEmpty;
 
-  double value = grh->getInterpolatedValue(lon, lat, true);
+  // Note that SCALAR is not supported here (and not possible with a single
+  // record)
+  double value = grh->getInterpolatedValue(
+      lon, lat, GribRecord::InterpolationMethod::VECTOR,
+      GribRecord::SmoothingMethod::NO_SMOOTHING);
   if (value == GRIB_NOTDEF) return returnOnEmpty;
 
   return postProcessFn ? postProcessFn(value) : value;

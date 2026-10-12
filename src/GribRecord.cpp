@@ -524,6 +524,9 @@ bool GribRecord::GetSpatialInterpolationGrid(
   return Ni > 0 && Nj > 0;
 }
 
+// No spatial smoothing here, because it is assumed that the rectified
+// record will again be queried at some in-between point and then
+// smoothing will be applied
 GribRecord *GribRecord::SpatiallyInterpolatedRecord(
     const GribRecord &rec1, const GribRecord &rec2, double d, bool dir) {
   double La1, Lo1, La2, Lo2, Di, Dj;
@@ -538,8 +541,12 @@ GribRecord *GribRecord::SpatiallyInterpolatedRecord(
     const double lat = La1 + j * Dj;
     for (int i = 0; i < Ni; ++i) {
       const double lon = Lo1 + i * Di;
-      const double first = rec1.getInterpolatedValue(lon, lat, true, dir);
-      const double second = rec2.getInterpolatedValue(lon, lat, true, dir);
+      const double first = rec1.getInterpolatedValue(
+        lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+        dir);
+      const double second = rec2.getInterpolatedValue(
+        lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+        dir);
       const int index = j * Ni + i;
       if (first == GRIB_NOTDEF || second == GRIB_NOTDEF) {
         values[index] = GRIB_NOTDEF;
@@ -593,10 +600,18 @@ GribRecord *GribRecord::SpatiallyInterpolated2DRecord(
     const double lat = La1 + j * Dj;
     for (int i = 0; i < Ni; ++i) {
       const double lon = Lo1 + i * Di;
-      const double firstX = rec1x.getInterpolatedValue(lon, lat, true);
-      const double firstY = rec1y.getInterpolatedValue(lon, lat, true);
-      const double secondX = rec2x.getInterpolatedValue(lon, lat, true);
-      const double secondY = rec2y.getInterpolatedValue(lon, lat, true);
+      const double firstX = rec1x.getInterpolatedValue(
+          lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+          true);
+      const double firstY = rec1y.getInterpolatedValue(
+          lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+          true);
+      const double secondX = rec2x.getInterpolatedValue(
+          lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+          true);
+      const double secondY = rec2y.getInterpolatedValue(
+          lon, lat, InterpolationMethod::SCALAR, SmoothingMethod::NO_SMOOTHING,
+          true);
       const int index = j * Ni + i;
       if (firstX == GRIB_NOTDEF || firstY == GRIB_NOTDEF ||
           secondX == GRIB_NOTDEF || secondY == GRIB_NOTDEF) {
@@ -648,21 +663,25 @@ GribRecord *GribRecord::SpatiallyInterpolated2DRecord(
 //-------------------------------------------------------------------------------
 // Constructeur de interpolate
 //-------------------------------------------------------------------------------
+// Always InterpolationMethod::SCALAR
 GribRecord *GribRecord::InterpolatedRecord(const GribRecord &rec1,
                                            const GribRecord &rec2, double d,
+                                           const SmoothingMethod sm,
                                            bool dir) {
   if (!std::isfinite(d)) return nullptr;
   double La1, Lo1, La2, Lo2, Di, Dj;
   int im1, jm1, im2, jm2;
   int Ni, Nj, rec1offi, rec1offj, rec2offi, rec2offj;
   
-  // Apply smoothing method
-  if (sm == SmoothingMethod::PSEUDO_HERMITE) d = (3.0 - 2.0 * d) * d * d;
-  
+  // Grid points of rec1 and rec2 do not align, requiring spatial interpolation
   if (!GetInterpolatedParameters(rec1, rec2, La1, Lo1, La2, Lo2, Di, Dj, im1,
                                  jm1, im2, jm2, Ni, Nj, rec1offi, rec1offj,
                                  rec2offi, rec2offj))
     return SpatiallyInterpolatedRecord(rec1, rec2, d, dir);
+
+  // Apply smoothing method
+  if (sm == SmoothingMethod::PSEUDO_HERMITE)
+      d = (3.0 - 2.0 * d) * d * d;
 
   // recopie les champs de bits
   int size = Ni * Nj;
@@ -685,9 +704,9 @@ GribRecord *GribRecord::InterpolatedRecord(const GribRecord &rec1,
         data[in] = GRIB_NOTDEF;
       else {
         if (!dir)
-          data[in] = (1 - d) * data1 + d * data2;
+          data[in] = (1 - d) * data1 + d * data2; // temporal SCALAR
         else
-          data[in] = interp_angle(data1, data2, d, 180.);
+          data[in] = interp_angle(data1, data2, d, 180.); // temporal SCALAR
       }
 
       if (BMSbits) {
@@ -749,9 +768,10 @@ GribRecord* GribRecord::Interpolated2DRecord(GribRecord*& rety,
                                  rec2offi, rec2offj))
     return SpatiallyInterpolated2DRecord(rety, rec1x, rec1y, rec2x, rec2y, d);
 
-  // recopie les champs de bits
   if (sm == SmoothingMethod::PSEUDO_HERMITE)
     d = (3.0 - 2.0 * d) * d * d;  // pseudo hermite interpolation
+
+  // recopie les champs de bits
   int size = Ni * Nj;
   std::unique_ptr<double[]> valuesX(new double[size]);
   std::unique_ptr<double[]> valuesY(new double[size]);
@@ -827,7 +847,7 @@ GribRecord* GribRecord::MagnitudeRecord(const GribRecord& rec1,
   /* generate a record which is the combined magnitude of two records */
   if (rec1.data && rec2.data && rec1.Ni == rec2.Ni && rec1.Nj == rec2.Nj) {
     const std::size_t size = rec1.dataCount();
-    for (int i = 0; i < size; i++)
+    for (size_t i = 0; i < size; i++)
       if (rec1.data[i] == GRIB_NOTDEF || rec2.data[i] == GRIB_NOTDEF)
         rec->data[i] = GRIB_NOTDEF;
       else
@@ -852,7 +872,7 @@ void GribRecord::Polar2UV(GribRecord *pDIR, GribRecord *pSPEED) {
   if (pDIR->data && pSPEED->data && pDIR->Ni == pSPEED->Ni &&
       pDIR->Nj == pSPEED->Nj) {
     const std::size_t size = pDIR->dataCount();
-    for (int i = 0; i < size; i++) {
+    for (size_t i = 0; i < size; i++) {
       if (pDIR->data[i] != GRIB_NOTDEF && pSPEED->data[i] != GRIB_NOTDEF) {
         double dir = pDIR->data[i];
         double speed = pSPEED->data[i];
@@ -942,21 +962,6 @@ std::string GribRecord::makeKey(int dataType, int levelType, int levelValue) {
   std::snprintf(key, sizeof(key), "%d-%d-%d", dataType, levelType, levelValue);
   return std::string(key);
 }
-//-----------------------------------------
-GribRecord::~GribRecord() {
-  if (data) {
-    delete[] data;
-    data = nullptr;
-  }
-  if (BMSbits) {
-    delete[] BMSbits;
-    BMSbits = nullptr;
-  }
-
-  // if (dataType==GRB_TEMP) printf("record destroyed %s   %d\n",
-  // dataKey.mb_str(), (int)curDate/3600);
-}
-
 //-------------------------------------------------------------------------------
 void GribRecord::multiplyAllData(double k) {
   if (data == 0 || !isOk() || !dataCount()) return;
