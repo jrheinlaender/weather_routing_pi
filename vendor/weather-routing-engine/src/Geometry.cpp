@@ -5,10 +5,11 @@
 #include <numbers>
 
 namespace supercpn::weather_routing {
-namespace {
-constexpr double kEarthRadiusNm = 3440.065;
 double radians(double value) { return value * std::numbers::pi / 180.0; }
 double degrees(double value) { return value * 180.0 / std::numbers::pi; }
+
+namespace {
+constexpr double kEarthRadiusNm = 3440.065;
 double angularDistance(GeoPoint a, GeoPoint b) {
   const double lat1 = radians(a.latitude);
   const double lat2 = radians(b.latitude);

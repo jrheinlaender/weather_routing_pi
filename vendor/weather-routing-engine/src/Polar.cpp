@@ -6,6 +6,8 @@
 #include <limits>
 
 namespace supercpn::weather_routing {
+double radians(double value);
+double degrees(double value);
 namespace {
 double rowSpeed(const PolarRow& row, double angle) {
   angle = std::clamp(std::abs(angle), 0.0, 180.0);
@@ -207,13 +209,6 @@ PerformanceCandidate PolarPerformanceModel::evaluate(
 }
 
 namespace {
-double deg2rad(const double angle) {
-  return angle / 180.0 * std::numbers::pi;
-}
-
-double rad2deg(const double angle) {
-  return angle / std::numbers::pi * 180.0;
-}
 using OptimalAngles::Angle::STARBOARD_UPWIND;
 using OptimalAngles::Angle::STARBOARD_DOWNWIND;
 using OptimalAngles::Angle::PORT_DOWNWIND;
@@ -221,9 +216,9 @@ using OptimalAngles::Angle::PORT_UPWIND;
 
 double iterSolveOptimalAngle(const PolarPoint& low, const PolarPoint& high,
                              const double twa_start) {
-  double d_twa = deg2rad(high.trueWindAngleDegrees - low.trueWindAngleDegrees);
+  double d_twa = radians(high.trueWindAngleDegrees - low.trueWindAngleDegrees);
   double d_bs = high.boatSpeedKnots - low.boatSpeedKnots;
-  double twa_low = deg2rad(low.trueWindAngleDegrees);
+  double twa_low = radians(low.trueWindAngleDegrees);
   double twa_next = twa_start;
   double twa;
   unsigned it = 0;
@@ -263,7 +258,7 @@ const std::shared_ptr<OptimalAngles> PolarRow::GetOptimalAngles() const {
     double upwind = (sector == STARBOARD_UPWIND ||
                      sector == PORT_UPWIND) ? 1 : -1;
 
-    double vmg = upwind * cos(deg2rad(twa)) * p->boatSpeedKnots;
+    double vmg = upwind * cos(radians(twa)) * p->boatSpeedKnots;
     if (vmg > p_max[size_t(sector)].second)
       p_max[size_t(sector)] = {p, vmg};
   }
@@ -278,7 +273,7 @@ const std::shared_ptr<OptimalAngles> PolarRow::GetOptimalAngles() const {
       continue;
 
     double upwind = (a == STARBOARD_UPWIND || a == PORT_UPWIND) ? 1.0 : -1.0;
-    double twa_l = deg2rad(p_mid->trueWindAngleDegrees);
+    double twa_l = radians(p_mid->trueWindAngleDegrees);
     double twa_r = twa_l;
     auto p_l = (p_mid == m_points.begin()) ? p_mid : p_mid - 1;
     auto p_r = (p_mid == m_points.end() - 1) ? p_mid : p_mid + 1;
@@ -291,8 +286,8 @@ const std::shared_ptr<OptimalAngles> PolarRow::GetOptimalAngles() const {
      */
     double d_bs_l  = p_mid->boatSpeedKnots - p_l->boatSpeedKnots;
     double d_bs_r  = p_r->boatSpeedKnots - p_mid->boatSpeedKnots;
-    double d_twa_l = deg2rad(p_mid->trueWindAngleDegrees - p_l->trueWindAngleDegrees);
-    double d_twa_r = deg2rad(p_r->trueWindAngleDegrees - p_mid->trueWindAngleDegrees);
+    double d_twa_l = radians(p_mid->trueWindAngleDegrees - p_l->trueWindAngleDegrees);
+    double d_twa_r = radians(p_r->trueWindAngleDegrees - p_mid->trueWindAngleDegrees);
     double vmg_l   = 0.0;
     double vmg_r   = 0.0;
 
@@ -311,7 +306,7 @@ const std::shared_ptr<OptimalAngles> PolarRow::GetOptimalAngles() const {
       vmg_r = upwind * cos(twa_r) * (p_mid->boatSpeedKnots + (twa_r - twa) / d_twa_r * d_bs_r);
     }
 
-    m_optimal_angles->at(a) = rad2deg(vmg_l > vmg_r ? twa_l : twa_r);
+    m_optimal_angles->at(a) = degrees(vmg_l > vmg_r ? twa_l : twa_r);
   }
 
   // For symmetric polars. And it assumes the points are sorted ascending
