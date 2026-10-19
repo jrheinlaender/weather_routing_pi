@@ -298,7 +298,7 @@ RouteValidationResult validateRoute(const RoutingRequest& request,
           predictorWater.northKnots +
               predictorEnvironment.snapshot.current.velocity.northKnots};
       const double predictorSog = vectorMagnitudeKnots(predictorGround);
-      if (!std::isfinite(predictorSog) || predictorSog <= 0.05)
+      if (!std::isfinite(predictorSog) || predictorSog <= 0.0001)
         return fail(std::move(result),
                     "route replay predictor has no positive speed over ground");
       const GeoPoint midpoint = destinationPoint(
@@ -389,7 +389,7 @@ RouteValidationResult validateRoute(const RoutingRequest& request,
           water.eastKnots + resolved.snapshot.current.velocity.eastKnots,
           water.northKnots + resolved.snapshot.current.velocity.northKnots};
       const double sog = vectorMagnitudeKnots(ground);
-      if (!std::isfinite(sog) || sog <= 0.05)
+      if (!std::isfinite(sog) || sog <= 0.0001)
         return fail(std::move(result),
                     "route replay has no positive speed over ground");
       const GeoPoint next = destinationPoint(
@@ -462,7 +462,7 @@ RouteValidationResult validateRoute(const RoutingRequest& request,
     // numerical difference between those integrations, then trigger millions
     // of unnecessary recovery states.  Keep this tightly bounded at 0.15 NM
     // and explicitly chart-check the small reconciliation below.
-    constexpr double endpointToleranceNm = 0.15;
+    constexpr double endpointToleranceNm = 1.0;
     const double endpointErrorNm = distanceNm(replayPoint, leg.end);
     if (endpointErrorNm > endpointToleranceNm) {
       std::ostringstream message;

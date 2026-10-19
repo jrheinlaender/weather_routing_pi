@@ -419,7 +419,7 @@ std::optional<MotionReplay> integrateMotion(
   replay.end = from.position;
   replay.finalPerformance = selected;
   maximumSlice =
-      std::clamp(maximumSlice, Duration{1}, Duration{std::chrono::minutes{5}});
+      std::clamp(maximumSlice, Duration{1}, Duration{std::chrono::minutes{60}});
   Duration elapsed{};
   double speedSeconds = 0.0;
   auto predictorResolved = internal::resolveEnvironment(
@@ -456,7 +456,7 @@ std::optional<MotionReplay> integrateMotion(
     if (!std::isfinite(startSog) || startSog <= 0.05) return {};
     const auto midpointFor = [&](Duration interval) {
       const double halfHours =
-          std::chrono::duration<double>(interval).count() / 7200.0;
+          std::chrono::duration<double>(interval).count() / 3600.0 / 2.0;
       return destinationPoint(replay.end, vectorDirectionToDegrees(startGround),
                               startSog * halfHours);
     };
@@ -1467,7 +1467,7 @@ SearchArtifacts forwardSearch(const RoutingRequest& request,
         const Duration integrationSlice{
             coastalDepartureEgress || refineIntegration
                 ? std::chrono::minutes{5}
-                : std::chrono::minutes{15}};
+                : std::chrono::minutes{60}};
         for (auto& next : propagate(request, environment, resolved, performance,
                                     from, heading, layerStep, diagnostics,
                                     integrationSlice, &dataFailure)) {

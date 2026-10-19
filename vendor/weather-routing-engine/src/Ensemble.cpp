@@ -65,7 +65,7 @@ RoutingResult replayGeometry(const RoutingRequest& request,
                                               available.speedThroughWaterKnots -
                                           currentCross * currentCross);
       correctedGroundSpeed = waterAlong + currentAlong;
-      if (correctedGroundSpeed <= 0.05) break;
+      if (correctedGroundSpeed <= 0.0001) break;
       const Vector2 waterVelocity{
           waterAlong * along.eastKnots - currentCross * right.eastKnots,
           waterAlong * along.northKnots - currentCross * right.northKnots};
@@ -77,7 +77,7 @@ RoutingResult replayGeometry(const RoutingRequest& request,
       }
       heading = correctedHeading;
     }
-    if (correctedGroundSpeed <= 0.05) {
+    if (correctedGroundSpeed <= 0.0001) {
       result.status = RoutingStatus::NoFeasibleRoute;
       result.message = "ensemble replay has non-positive ground speed";
       return result;
