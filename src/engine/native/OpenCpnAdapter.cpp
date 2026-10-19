@@ -831,6 +831,7 @@ wr::RoutingRequest BuildRequest(RouteMapOverlay& overlay,
       static_cast<std::int64_t>(std::llround(configuration.JibingTime))};
   request.vessel.sailPlanChangePenalty = wr::Duration{static_cast<std::int64_t>(
       std::llround(configuration.SailPlanChangeTime))};
+  request.vessel.usePerformanceLoss = configuration.UsePerformanceLoss;
   request.vessel.propulsion.allowSailing = true;
   request.vessel.propulsion.allowMotor = configuration.UseMotor;
   request.vessel.propulsion.motorBelowSailingSpeedKnots =

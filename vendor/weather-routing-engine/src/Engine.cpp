@@ -32,6 +32,7 @@ struct Node {
   TimePoint time{};
   double incomingHeading{};
   Tack tack{Tack::Unknown};
+  double performancePercentage{1.0};
   PropulsionMode mode{PropulsionMode::Sail};
   ProfileRole role{ProfileRole::SailOnly};
   std::string profileIdentity;
@@ -316,16 +317,37 @@ bool hardMotionConstraints(const RoutingRequest& request,
 }
 
 Duration transitionPenalty(const RoutingRequest& request, const Node& from,
-                           PropulsionMode nextMode, Tack nextTack,
-                           int nextSailPlan, double twa) {
+                           PerformanceCandidate& performance,
+                           Tack nextTack, double heading, double twa) {
   Duration penalty{};
-  if (nextMode != from.mode)
+
+  if (request.vessel.usePerformanceLoss && performance.percentage >= 0.93) {
+    // Transition penalty only applies if performance has not dropped
+    // below 93% due to prior transitions
+    double initial_performance = performance.percentage;
+
+    if (from.tack != Tack::Unknown && nextTack != from.tack)
+      // Performance loss through tacking or jibing
+      performance.percentage = performance.percentage *
+        (1.0 - performance.speedThroughWaterKnots *
+               performance.percentage / 2.0 / 100.0);
+    else if (std::fabs(from.incomingHeading - heading) > 1E-6)
+      // Performance loss through course change
+      performance.percentage = performance.percentage *
+        (1.0 - radians(std::fabs(from.incomingHeading - heading)) / 25.0);
+
+    // Maneuver optimization (applied after routing) will keep performance >= 93%
+    performance.percentage = std::max(0.93, performance.percentage);
+    // Note: Return value of transitionPenalty() is not used here
+  }
+
+  if (performance.mode != from.mode)
     penalty += request.vessel.propulsion.modeChangePenalty;
   if (from.tack != Tack::Unknown && nextTack != from.tack) {
     penalty +=
         twa <= 90.0 ? request.vessel.tackPenalty : request.vessel.gybePenalty;
   }
-  if (from.sailPlan >= 0 && nextSailPlan >= 0 && from.sailPlan != nextSailPlan)
+  if (from.sailPlan >= 0 && performance.sailPlan >= 0 && from.sailPlan != performance.sailPlan)
     penalty += request.vessel.sailPlanChangePenalty;
   return penalty;
 }
@@ -435,30 +457,36 @@ std::optional<MotionReplay> integrateMotion(
         vectorMagnitudeKnots(predictorResolved.snapshot.wind.velocity);
     const double startTwa =
         trueWindAngleDegrees(predictorResolved.snapshot.wind.velocity, heading);
-    const auto startPerformance = performanceModel.evaluateAt(
+    auto startPerformance = performanceModel.evaluateAt(
         replay.end, movingStart + elapsed, selected.mode, selected.role,
         selected.profileIdentity, startTws, startTwa,
         predictorResolved.snapshot.waves);
+    startPerformance.percentage = selected.percentage;
     if (!startPerformance.valid ||
         !hardEnvironmentConstraints(request, predictorResolved.snapshot) ||
         !hardMotionConstraints(request, predictorResolved.snapshot, heading,
-                               startPerformance.speedThroughWaterKnots))
+                               startPerformance.GetStw()))
       return {};
 
-    const Vector2 startWater = speedDirectionToVector(
-        startPerformance.speedThroughWaterKnots, heading);
-    const Vector2 startGround{
-        startWater.eastKnots +
-            predictorResolved.snapshot.current.velocity.eastKnots,
-        startWater.northKnots +
-            predictorResolved.snapshot.current.velocity.northKnots};
-    const double startSog = vectorMagnitudeKnots(startGround);
-    if (!std::isfinite(startSog) || startSog <= 0.05) return {};
+    // Increases performance and returns average speed over interval
+    // Note: slice.count() is a long
+    double startSog = startPerformance.recoverFor(0.5 * slice.count());
+    double startHeading = heading;
+    if (request.environment.useCurrent) {
+        const Vector2 startWater = speedDirectionToVector(startSog, heading);
+        const Vector2 startGround{
+            startWater.eastKnots +
+                predictorResolved.snapshot.current.velocity.eastKnots,
+            startWater.northKnots +
+                predictorResolved.snapshot.current.velocity.northKnots};
+        startSog = vectorMagnitudeKnots(startGround);
+        startHeading = vectorDirectionToDegrees(startGround);
+    }
+    if (!std::isfinite(startSog) || startSog <= 0.0001) return {};
     const auto midpointFor = [&](Duration interval) {
       const double halfHours =
           std::chrono::duration<double>(interval).count() / 3600.0 / 2.0;
-      return destinationPoint(replay.end, vectorDirectionToDegrees(startGround),
-                              startSog * halfHours);
+      return destinationPoint(replay.end, startHeading, startSog * halfHours);
     };
     GeoPoint midpoint = midpointFor(slice);
     auto midpointResolved = internal::resolveEnvironment(
@@ -480,26 +508,29 @@ std::optional<MotionReplay> integrateMotion(
     if (!midpointPerformance.valid ||
         !hardEnvironmentConstraints(request, midpointResolved.snapshot) ||
         !hardMotionConstraints(request, midpointResolved.snapshot, heading,
-                               midpointPerformance.speedThroughWaterKnots))
+                               midpointPerformance.GetStw()))
       return {};
 
-    const Vector2 water = speedDirectionToVector(
-        midpointPerformance.speedThroughWaterKnots, heading);
-    const Vector2 ground{
-        water.eastKnots + midpointResolved.snapshot.current.velocity.eastKnots,
-        water.northKnots +
-            midpointResolved.snapshot.current.velocity.northKnots};
-    const double sog = vectorMagnitudeKnots(ground);
-    if (!std::isfinite(sog) || sog <= 0.05) return {};
+    double sog = midpointPerformance.recoverFor(0.5 * slice.count());
+    double head = heading;
+
+    if (request.environment.useCurrent) {
+        const Vector2 water = speedDirectionToVector(sog, heading);
+        const Vector2 ground{
+            water.eastKnots + midpointResolved.snapshot.current.velocity.eastKnots,
+            water.northKnots +
+                midpointResolved.snapshot.current.velocity.northKnots};
+        sog = vectorMagnitudeKnots(ground);
+        head = vectorDirectionToDegrees(ground);
+    }
+    if (!std::isfinite(sog) || sog <= 0.0001) return {};
     const double sliceSeconds = std::chrono::duration<double>(slice).count();
     const GeoPoint next =
-        destinationPoint(replay.end, vectorDirectionToDegrees(ground),
-                         sog * sliceSeconds / 3600.0);
+        destinationPoint(replay.end, head, sog * sliceSeconds / 3600.0);
     replay.segments.push_back({replay.end, next, movingStart + elapsed});
     replay.end = next;
     replay.finalPerformance = std::move(midpointPerformance);
-    speedSeconds +=
-        replay.finalPerformance.speedThroughWaterKnots * sliceSeconds;
+    speedSeconds += sog * sliceSeconds; // TODO what about sog and current?
     replay.fuelLitres +=
         replay.finalPerformance.fuelLitresPerHour * sliceSeconds / 3600.0;
     if (midpointResolved.snapshot.waves.available)
@@ -660,13 +691,13 @@ std::optional<Node> directConnection(
     const double assumedHeading = normalizeHeading(groundCourse + seed * 5.0);
     const double twa =
         trueWindAngleDegrees(resolved.snapshot.wind.velocity, assumedHeading);
-    const auto options = performanceModel.candidatesAt(
+    auto options = performanceModel.candidatesAt(
         from.position, from.time,
         resolved.snapshot.wind.available
             ? vectorMagnitudeKnots(resolved.snapshot.wind.velocity)
             : 0.0,
         twa, resolved.snapshot.waves, from.mode, from.modeDuration);
-    for (const auto& candidate : options) {
+    for (auto& candidate : options) {
       if (!candidate.valid) continue;
       double trialHeading = assumedHeading;
       const double initialGroundSpeed =
@@ -679,11 +710,12 @@ std::optional<Node> directConnection(
       for (int iteration = 0; iteration < 10; ++iteration) {
         const double trialTwa =
             trueWindAngleDegrees(resolved.snapshot.wind.velocity, trialHeading);
+        // Set initial percentage from previous node
+        candidate.percentage = from.performancePercentage;
         const Tack nextTack =
             tackFor(trialHeading, resolved.snapshot.wind.velocity);
         const Duration penalty =
-            transitionPenalty(request, from, candidate.mode, nextTack,
-                              candidate.sailPlan, trialTwa);
+            transitionPenalty(request, from, candidate, nextTack, trialHeading, trialTwa);
         if (trialMoving <= Duration::zero() ||
             trialMoving + penalty > maximumDuration)
           break;
@@ -733,6 +765,7 @@ std::optional<Node> directConnection(
       node.time = from.time + total;
       node.incomingHeading = trialHeading;
       node.tack = acceptedTack;
+      node.performancePercentage = candidate.percentage;
       node.mode = candidate.mode;
       node.role = candidate.role;
       node.profileIdentity = candidate.profileIdentity;
@@ -799,19 +832,22 @@ std::vector<Node> propagate(const RoutingRequest& request,
   const double tws = vectorMagnitudeKnots(resolved.snapshot.wind.velocity);
   const double twa =
       trueWindAngleDegrees(resolved.snapshot.wind.velocity, heading);
-  const auto performances = performanceModel.candidatesAt(
+  auto performances = performanceModel.candidatesAt(
       from.position, from.time, tws, twa, resolved.snapshot.waves, from.mode,
       from.modeDuration);
   std::vector<Node> result;
-  for (const auto& performance : performances) {
+  for (auto& performance : performances) {
     if (!hardMotionConstraints(request, resolved.snapshot, heading,
                                performance.speedThroughWaterKnots)) {
       ++diagnostics.constraintRejections;
       continue;
     }
+    performance.percentage = from.performancePercentage;
+    // Will we be on starboard or port tack?
     const Tack nextTack = tackFor(heading, resolved.snapshot.wind.velocity);
+    // How much time is lost by the transition?
     const Duration penalty = transitionPenalty(
-        request, from, performance.mode, nextTack, performance.sailPlan, twa);
+        request, from, performance, nextTack, heading, twa);
     if (penalty >= step) continue;
     const Duration moving = step - penalty;
     auto replay =
@@ -836,6 +872,8 @@ std::vector<Node> propagate(const RoutingRequest& request,
     node.time = from.time + step;
     node.incomingHeading = heading;
     node.tack = nextTack;
+    // Note that performance is const in call to integrateMotion()
+    node.performancePercentage = replay->finalPerformance.percentage;
     node.mode = performance.mode;
     node.role = performance.role;
     node.profileIdentity = performance.profileIdentity;

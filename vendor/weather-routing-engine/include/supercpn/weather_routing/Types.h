@@ -220,6 +220,7 @@ struct VesselConfiguration {
   Duration tackPenalty{};
   Duration gybePenalty{};
   Duration sailPlanChangePenalty{};
+  bool usePerformanceLoss{false};
 };
 
 enum class ClimatologyFallbackPolicy {

@@ -143,8 +143,45 @@ struct PerformanceCandidate {
   ProfileRole role{ProfileRole::SailOnly};
   std::string profileIdentity;
   int sailPlan{-1};
-  double speedThroughWaterKnots{};
   double fuelLitresPerHour{};
+  double speedThroughWaterKnots{};
+  double percentage{1.0}; // Multiplier for stw
+  double GetStw() { return speedThroughWaterKnots * percentage; }
+  /**
+    * Performance recovery, probably happens in every server jump even when
+    * there is a loss. Calculation assumes that loss is calculated right at the
+    * beginning of the jump, but it may be at any time during the jump
+    */
+  double recoverFor(const double seconds) {
+    if (percentage < 1.0 && seconds > 0.0) {
+      double jump = std::min(seconds, 10.0);
+      double current_time = 0.0;
+      double dist = 0.0;
+
+      while (current_time < seconds) {
+          double step = std::min(jump, seconds - current_time);
+          // The loop always calculates the performance and distance at current_time
+          percentage = std::min(
+              1.0, percentage + step * 3.0 / (20.0 * GetStw()) / 100.0);
+
+            dist += GetStw() * step / 3600.0;
+
+          if (percentage >= 1.0)
+              break;
+
+          current_time += step;
+      }
+
+      if (current_time < seconds)
+          dist += GetStw() * (seconds - current_time) / 3600.0;
+
+
+      // Average speed over whole interval (timeseconds)
+      return dist / (seconds / 3600.0);
+    }
+
+    return speedThroughWaterKnots;
+  }
 };
 
 class VesselPerformanceModel {

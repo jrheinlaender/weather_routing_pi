@@ -6,6 +6,8 @@
 
 namespace supercpn::weather_routing {
 
+double radians(double value);
+double degrees(double value);
 double normalizeLongitude(double longitude);
 double normalizeHeading(double heading);
 double angularDifferenceDegrees(double a, double b);
